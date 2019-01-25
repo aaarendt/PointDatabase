@@ -15,7 +15,7 @@ from osgeo import osr
 import matplotlib.pyplot as plt
 from ATL11.ATL06_data import ATL06_data        
 from IS2_calval.qfit_data import Qfit_data
-from ATL11.point_data import point_data
+from PointDatabase.point_data import point_data
        
 class geo_index(dict):
     def __init__(self, delta=[1000,1000], SRS_proj4=None, data=None):
@@ -258,7 +258,7 @@ class geo_index(dict):
             h5f.close()
         if file_type in ['indexed_h5_from_matlab']:
             h5f=h5py.File(filename,'r')
-            xy=[np.array(h5f['INDEX']['bin_x'])*1000, np.array(h5f['INDEX']['bin_y'])*1000]
+            xy=[np.array(h5f['INDEX']['bin_x']), np.array(h5f['INDEX']['bin_y'])]
             first_last=None
             fake_offset=-1
             self.from_xy(xy, filename, file_type, number=number, first_last=first_last, fake_offset_val=fake_offset)
@@ -508,7 +508,7 @@ def read_indexed_h5_file(filename, xy_bin,  fields=['x','y','time'], index_range
                 else:
                     blank_fields.append(field)
     h5f.close()
-    return point_data().from_list(out_data, list_of_fields=fields)
+    return point_data( list_of_fields=fields).from_list(out_data )
 
 def append_data(group, field, newdata):  
     # utility function that can append data either to an hdf5 field or a dict of numpy array
