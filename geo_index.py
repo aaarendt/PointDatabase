@@ -428,7 +428,7 @@ def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, di
         else:
             this_file=file_key
         if result['type'] == 'h5_geoindex':
-            out_data += geo_index().from_file(this_file).query_xy((result['x'], result['y']),  fields=fields, get_data=True)
+            out_data += geo_index().from_file(this_file).query_xy((result['x'], result['y']),  fields=fields, get_data=True, dir_root=dir_root)
         if result['type'] == 'ATL06':
             if fields is None:
                 fields={None:(u'latitude',u'longitude',u'h_li',u'delta_time')}
@@ -491,7 +491,7 @@ def read_indexed_h5_file(filename, xy_bin,  fields=['x','y','time'], index_range
         for field in fields:
             for i0_i1 in zip(index_range):
                 if field in h5f:
-                    out_data[field].append([h5f[field][i0_i1[0]:i0_i1[1]]])
+                    out_data[field].append(np.array(h5f[field][i0_i1[0]:i0_i1[1]]))
                 else:
                     blank_fields.append(field)
     else:
@@ -501,14 +501,20 @@ def read_indexed_h5_file(filename, xy_bin,  fields=['x','y','time'], index_range
             for field in fields:
                 if field in h5f:
                      if bin_name in h5f[field]:
-                         out_data[field].append([h5f[bin_name][field]])
+                         out_data[field].append(np.array(h5f[field][bin_name]))
                 elif bin_name in h5f:
                     if field in h5f[bin_name]:
-                        out_data[field].append([h5f[bin_name][field]])
+                        out_data[field].append(np.array(h5f[bin_name][field]))
                 else:
                     blank_fields.append(field)
     h5f.close()
-    return point_data( list_of_fields=fields).from_list(out_data )
+    for field in fields:
+        if isinstance(out_data[field], list):
+            if len(out_data[field])>1:
+                out_data[field]=np.concatenate(out_data[field])
+            else:
+                out_data[field]=np.array(out_data[field])
+    return point_data( list_of_fields=fields).from_dict(out_data )
 
 def append_data(group, field, newdata):  
     # utility function that can append data either to an hdf5 field or a dict of numpy array
