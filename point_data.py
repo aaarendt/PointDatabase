@@ -8,24 +8,24 @@ import h5py
 import numpy as np
 from osgeo import osr
 import os
- 
+
 
 class point_data(object):
     np.seterr(invalid='ignore')
     def __init__(self, list_of_fields=None, SRS_proj4=None, field_dict=None, columns=0):
-        
+
         if field_dict is None:
             self.field_dict=self.__default_field_dict__()
         else:
             self.field_dict=field_dict
-            
+
         if list_of_fields is None:
             list_of_fields=list()
             if field_dict is not None:
                 for group in self.field_dict.keys():
                     for field in self.field_dict[group]:
                         list_of_fields.append(field)
-        
+
         self.list_of_fields=list_of_fields
         self.SRS_proj4=SRS_proj4
         self.columns=columns
@@ -37,10 +37,10 @@ class point_data(object):
         """
         field_dict={None:('latitude','longitude','z')}
         return field_dict
-        
+
     def copy_attrs(self):
         return point_data(list_of_fields=self.list_of_fields, SRS_proj4=self.SRS_proj4, columns=self.columns)
-    
+
     def from_file(self, filename, field_dict=None, index_range=None):
         h5_f=h5py.File(filename, 'r')
         nan_fields=list()
@@ -51,7 +51,7 @@ class point_data(object):
             ind=slice(None)
         else:
             ind=slice(*index_range)
-            
+
         for group in field_dict.keys():
             for field in field_dict[group]:
                 if field not in self.list_of_fields:
@@ -64,11 +64,11 @@ class point_data(object):
                             setattr(self, field, np.array(h5_f[field][:,ind]).transpose())
                     else:
                         if self.columns==0 or self.columns is None:
-                            setattr(self, field, np.array(h5_f[group][field][ind]).transpose())  
+                            setattr(self, field, np.array(h5_f[group][field][ind]).transpose())
                         else:
-                            setattr(self, field, np.array(h5_f[group][field][:,ind]).transpose())  
+                            setattr(self, field, np.array(h5_f[group][field][:,ind]).transpose())
                 except KeyError:
-                    nan_fields.append(field)            
+                    nan_fields.append(field)
             # find the first populated field
         if len(nan_fields) > 0:
             for field in self.list_of_fields:
@@ -81,7 +81,7 @@ class point_data(object):
         h5_f.close()
         return self
 
-    
+
     def get_xy(self, proj4_string=None, EPSG=None):
         # method to get projected coordinates for the data.  Adds 'x' and 'y' fields to the data, optionally returns 'self'
         out_srs=osr.SpatialReference()
@@ -102,12 +102,12 @@ class point_data(object):
         if 'x' not in self.list_of_fields:
             self.list_of_fields += ['x','y']
         return self
-    
+
     def append(self, D):
         for field in self.list_of_fields:
             setattr(self, np.c_[getattr(self, field), getattr(D, field)])
         return self
-    
+
     def from_dict(self, dd, list_of_fields=None):
         if list_of_fields is not None:
             self.list_of_fields=list_of_fields
@@ -120,18 +120,18 @@ class point_data(object):
     def from_list(self, D_list):
         try:
             for field in self.list_of_fields:
-                data_list=[getattr(this_D, field) for this_D in D_list]       
+                data_list=[getattr(this_D, field).ravel() for this_D in D_list]
                 setattr(self, field, np.concatenate(data_list, 0))
         except TypeError:
             for field in self.list_of_fields:
                 setattr(self, field, getattr(D_list, field))
         return self
-    
+
     def index(self, index):
         for field in self.list_of_fields:
             setattr(self, field, getattr(self, field)[index])
         return self
-        
+
     def subset(self, index, by_row=True, datasets=None):
         dd=dict()
         if self.columns is not None and self.columns >=1 and by_row is not None:
@@ -156,5 +156,16 @@ class point_data(object):
         for field in self.list_of_fields:
             h5f_out.create_dataset(field,data=getattr(self,field))
         h5f_out.close()
-        
-        
+
+    def assign(self,d):
+        for key in d.keys():
+            if key not in self.list_of_fields:
+                self.list_of_fields.append(key)
+            setattr(self, key, d[key])
+        return self
+
+    def coords(self):
+        if 'time' in self.list_of_fields:
+            return (self.y, self.x, self.time)
+        else:
+            return self.y, self.x
