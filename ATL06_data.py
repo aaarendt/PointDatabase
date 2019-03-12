@@ -54,9 +54,12 @@ class ATL06_data:
         """
         When data size and shape may have changed, update the size and shape atttributes
         """
-        temp=getattr(self, self.list_of_fields[0])
-        self.size=temp.size
-        self.shape=temp.shape
+        for field in self.list_of_fields:
+            temp=getattr(self, field)
+            if hasattr(temp, 'size'): 
+                self.size=temp.size
+                self.shape=temp.shape
+                break
         return self
         
     def __getitem__(self, rows):
@@ -99,15 +102,15 @@ class ATL06_data:
                 self.beam_type[count]=h5_f[beam_name]['atlas_beam_type']
             except KeyError:
                 pass  # leave the beam type as the default
+        if index_range is None or index_range[1]==-1:
+            index_range=[0, h5_f[beam_names[0]]['land_ice_segments']['h_li'].size]
+        n_vals=index_range[-1]-index_range[0]
         # read the orbit number
         try:
             self.rgt=int(h5_f['orbit_info']['rgt'][0])
             self.orbit=int(h5_f['orbit_info']['orbit_number'][0])
         except:
             pass
-        if index_range is None or index_range[1]==-1:
-            index_range=[0, h5_f[beam_names[0]]['land_ice_segments']['h_li'].size]
-        n_vals=index_range[-1]-index_range[0]
         
         for group in self.field_dict.keys():
             for field in self.field_dict[group]:
