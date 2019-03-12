@@ -7,6 +7,7 @@ Created on Fri Sep 21 14:28:30 2018
 import h5py
 import numpy as np
 from osgeo import osr
+from .pt_blockmedian import pt_blockmedian
 import os
 
 
@@ -25,11 +26,13 @@ class point_data(object):
                 for group in self.field_dict.keys():
                     for field in self.field_dict[group]:
                         list_of_fields.append(field)
-
+        if isinstance(list_of_fields, dict):
+            self.list_of_fields=list(list_of_fields)
         self.list_of_fields=list_of_fields
         self.SRS_proj4=SRS_proj4
         self.columns=columns
         self.shape=None
+        self.size=None
 
     def __default_field_dict__(self):
         """
@@ -37,7 +40,28 @@ class point_data(object):
         """
         field_dict={None:('latitude','longitude','z')}
         return field_dict
-
+        
+    def __copy__(self):
+        other=self.copy_attrs()
+        for field in self.list_of_fields:
+            setattr(other, field, getattr(self, field).copy())
+        return other
+    
+    def __update_size_and_shape__(self):
+        """
+        When data size and shape may have changed, update the size and shape atttributes
+        """
+        for field in self.list_of_fields:
+            temp=getattr(self, field)
+            if hasattr(temp, 'size'): 
+                self.size=temp.size
+                self.shape=temp.shape
+                break
+        return self
+    
+    def copy(self):
+        return self.__copy__()
+    
     def copy_attrs(self):
         return point_data(list_of_fields=self.list_of_fields, SRS_proj4=self.SRS_proj4, columns=self.columns)
 
@@ -79,8 +103,8 @@ class point_data(object):
                 for field in nan_fields:
                     setattr(self, field, np.zeros(self.shape)+np.NaN)
         h5_f.close()
+        self.__update_size_and_shape__()
         return self
-
 
     def get_xy(self, proj4_string=None, EPSG=None):
         # method to get projected coordinates for the data.  Adds 'x' and 'y' fields to the data, optionally returns 'self'
@@ -107,14 +131,15 @@ class point_data(object):
         for field in self.list_of_fields:
             setattr(self, np.c_[getattr(self, field), getattr(D, field)])
         return self
-
+    
     def from_dict(self, dd, list_of_fields=None):
         if list_of_fields is not None:
             self.list_of_fields=list_of_fields
         else:
-            self.list_of_fields=dd.keys()
+            self.list_of_fields=[key for key in dd.keys()]
         for field in self.list_of_fields:
                 setattr(self, field, dd[field])
+        self.__update_size_and_shape__()
         return self
 
     def from_list(self, D_list):
@@ -125,14 +150,26 @@ class point_data(object):
         except TypeError:
             for field in self.list_of_fields:
                 setattr(self, field, getattr(D_list, field))
+        self.__update_size_and_shape__()
         return self
 
     def index(self, index):
         for field in self.list_of_fields:
             setattr(self, field, getattr(self, field)[index])
+        self.__update_size_and_shape__()
         return self
-
-    def subset(self, index, by_row=True, datasets=None):
+        
+    def blockmedian(self, scale):
+        if self.size<2:
+            return self
+        ind=pt_blockmedian(self.x, self.y, np.float64(self.z), scale, return_index=True)[3]
+        for field in self.list_of_fields:
+            temp_field=getattr(self, field)
+            setattr(self, field,  0.5*temp_field[ind[:,0]] + 0.5*temp_field[ind[:,1]])
+        self.__update_size_and_shape__()
+        return self
+        
+    def subset(self, index, by_row=False, datasets=None):
         dd=dict()
         if self.columns is not None and self.columns >=1 and by_row is not None:
             by_row=True
@@ -140,13 +177,18 @@ class point_data(object):
             datasets=self.list_of_fields
         for field in datasets:
             temp_field=self.__dict__[field]
-            if temp_field.ndim ==1:
-                dd[field]=temp_field[index]
-            else:
-                if by_row is not None and by_row:
-                    dd[field]=temp_field[index,:]
+            try:
+                if temp_field.size==0 :
+                    continue
+                if temp_field.ndim ==1:
+                    dd[field]=temp_field[index]
                 else:
-                    dd[field]=temp_field.ravel()[index]
+                    if by_row is not None and by_row:
+                        dd[field]=temp_field[index,:]
+                    else:
+                        dd[field]=temp_field.ravel()[index.ravel()]
+            except IndexError:
+                print("IndexError")
         return self.copy_attrs().from_dict(dd, list_of_fields=datasets)
 
     def to_file(self, fileOut):
