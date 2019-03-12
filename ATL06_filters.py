@@ -43,7 +43,7 @@ def segDifferenceFilter(D6, tol=2, setValid=True, toNaN=False, subset=False):
     if toNaN:
         D6.h_li[mask==0]=np.NaN
     if subset:
-        D6.index(np.all(mask==1, axis=1))
+        D6.index(np.any(mask==1, axis=1))
 
     return mask
     

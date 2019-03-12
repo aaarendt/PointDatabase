@@ -13,7 +13,7 @@ import numpy as np
 import h5py
 from osgeo import osr
 import matplotlib.pyplot as plt
-from ATL11.ATL06_data import ATL06_data
+from PointDatabase.ATL06_data import ATL06_data
 from IS2_calval.qfit_data import Qfit_data
 from PointDatabase.point_data import point_data
 
@@ -34,7 +34,7 @@ class geo_index(dict):
             try:
                 self.h5_file.close()
             except SystemError as err:
-                print("SYSTEM ERROR: %s" % str(err))
+                print("CAUGHT SYSTEM ERROR: %s" % str(err))
         return
 
     def __copy__(self):
@@ -299,7 +299,7 @@ class geo_index(dict):
         other_sub=other.copy_subset(xyBin=[xyB[:,0], xyB[:,1]], pad=pad[1])
         return self_sub, other_sub
 
-    def query_xy(self, xyb, cleanup=True, get_data=True, fields=None, pad=None, dir_root='', strict=False, default_type=None):
+    def query_xy(self, xyb, cleanup=True, get_data=True, fields=None, pad=None, dir_root='', strict=False):
         # check if data exist within the current geo index for bins in lists/arrays
         #     xb and yb.
         # If argument delta is provided, find the bins in the current geo_index
@@ -310,7 +310,8 @@ class geo_index(dict):
         #    and the offsets in the file corresponding to each.
         # If 'pad' is provided, include bins between xb-pad*delta and xp+pad*delta (inclusive)
         #     in the query (likewise for y)
-
+        if 'dir_root' in self.attrs and len(dir_root)==0:
+            dir_root=self.attrs['dir_root']
         delta=self.attrs['delta']
         if isinstance(xyb[0], np.ndarray):
             xyb=[xyb[0].copy().ravel(), xyb[1].copy().ravel()]
@@ -372,8 +373,8 @@ class geo_index(dict):
             query_results=get_data_for_geo_index(query_results, delta=self.attrs['delta'], fields=fields, dir_root=dir_root)
             if strict is True:
                 # take the subset of data that rounds exactly to the query (OTW, may get data that extend outside)
-                if ~isinstance(query_results, list):
-                    query_results=list(query_results)
+                if not isinstance(query_results, list):
+                    query_results=[query_results]
                 for item in query_results:
                     if not hasattr(item,'x'):
                         item.get_xy(self.attrs['SRS_proj4'])
@@ -428,13 +429,25 @@ def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, di
         else:
             this_file=file_key
         if result['type'] == 'h5_geoindex':
-            out_data += geo_index().from_file(this_file).query_xy((result['x'], result['y']),  fields=fields, get_data=True, dir_root=dir_root)
+            temp=geo_index().from_file(this_file).query_xy((result['x'], result['y']), fields=fields, get_data=True, dir_root=dir_root)
+            if isinstance(temp, list):
+                out_data += temp
+            else:
+                out_data.append(temp)
         if result['type'] == 'ATL06':
             if fields is None:
                 fields={None:(u'latitude',u'longitude',u'h_li',u'delta_time')}
             D6_file, pair=this_file.split(':pair')
             #print("D6_file=%s"% D6_file)
-            D6=[ATL06_data(beam_pair=int(pair), field_dict=fields).from_file(filename=D6_file, index_range=np.array(temp)) for temp in zip(result['offset_start'], result['offset_end'])]
+            if isinstance(fields, dict):
+                field_dict=fields
+                field_list=None
+            else:
+                field_dict=None
+                field_list=fields
+            D6=[ATL06_data(beam_pair=int(pair), list_of_fields=field_list, field_dict=field_dict).from_file(\
+                filename=D6_file, index_range=np.array(temp)) \
+                for temp in zip(result['offset_start'], result['offset_end'])]
             if isinstance(D6,list):
                 out_data += D6
             else:
@@ -456,9 +469,8 @@ def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, di
         if result['type'] == 'indexed_h5_from_matlab':
             out_data += [read_indexed_h5_file(this_file, [result['x']/1000, result['y']/1000],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
         if result['type'] is None:
-            out_data=[data.subset(np.arange(temp[0], temp[1])) for temp in zip(result['offset_start'], result['offset_end'])]
-
-    return point_data(list_of_fields=fields).from_list(out_data)
+            out_data=[data.subset(np.arange(temp[0], temp[1])) for temp in zip(result['offset_start'], result['offset_end'])]  
+    return out_data
 
 def unique_points(xy, delta=[1, 1]):
     xr=(np.round(np.array(xy[0])/delta[0])*delta[0]).ravel().tolist()
@@ -512,23 +524,37 @@ def read_indexed_h5_file(filename, xy_bin,  fields=['x','y','time'], index_range
             for field in fields:
                 if field in h5f:
                      if bin_name in h5f[field]:
-                         out_data[field].append(np.array(h5f[field][bin_name]))
+                         out_data[field].append(np.array(h5f[field][bin_name]).squeeze())
                 elif bin_name in h5f:
                     if field in h5f[bin_name]:
-                        out_data[field].append(np.array(h5f[bin_name][field]))
+                        out_data[field].append(np.array(h5f[bin_name][field]).squeeze())
                 else:
                     blank_fields.append(field)
     h5f.close()
     for field in fields:
         if isinstance(out_data[field], list):
             if len(out_data[field])>1:
-                out_data[field]=np.concatenate(out_data[field])
+                try:
+                    temp=list()
+                    for item in out_data[field]:
+                        if item.size > 0 and item.ndim > 0:
+                            temp.append(item)
+                        elif item.size==1 and item.ndim ==0:
+                            temp.append(np.array([item]))
+                    if len(temp)>1:
+                        out_data[field]=np.concatenate(temp)
+                    elif len(temp)==0:
+                        out_data[field]=np.zeros(0)
+                    elif len(temp)==1:
+                        out_data[field]=temp[0]                         
+                except ValueError:
+                    print("ValueError!")
             else:
                 out_data[field]=np.array(out_data[field])
     return point_data( list_of_fields=fields).from_dict(out_data )
 
 def append_data(group, field, newdata):
-    # utility function that can append data either to an hdf5 field or a dict of numpy array
+    # utility function that can append data either to an hdf5 field or a dict of numpy arrays
     try:
         old_shape=np.array(group[field].shape)
         new_shape=old_shape.copy()
