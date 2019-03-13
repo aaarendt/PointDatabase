@@ -11,10 +11,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def read_DEM(file, band_num=1, bounds=None, skip=1, asPoints=False, getProjection=False):
+def read_DEM(file, band_num=1, bounds=None, skip=1, asPoints=False, keepAll=False, getProjection=False):
     """
         Read a raster from a DEM file
-    """   
+    """
     ds=gdal.Open(file, gdalconst.GA_ReadOnly)
     if getProjection:
         proj=ds.GetProjection()
@@ -33,10 +33,10 @@ def read_DEM(file, band_num=1, bounds=None, skip=1, asPoints=False, getProjectio
     else:
         rows=np.arange(band.YSize, dtype=int)
         cols=np.arange(band.XSize, dtype=int)
-    
+
     z=band.ReadAsArray(int(cols[0]), int(rows[0]), int(cols[-1]-cols[0]+1), int(rows[-1]-rows[0]+1))
     ds=None
-    
+
     if skip >1:
         z=z[::skip, ::skip]
         cols=cols[::skip]
@@ -51,15 +51,20 @@ def read_DEM(file, band_num=1, bounds=None, skip=1, asPoints=False, getProjectio
     y=y[rows]
     if asPoints:
         x,y=np.meshgrid(x, y)
-        keep=np.isfinite(z.ravel())
-        if getProjection:
-            return x.ravel()[keep], y.ravel()[keep], z.ravel()[keep], proj
+        if keepAll:
+            if getProjection:
+                return x.ravel(), y.ravel(), z.ravel(), proj
+            else:
+                return x.ravel(), y.ravel(), z.ravel()
         else:
-            return x.ravel()[keep], y.ravel()[keep], z.ravel()[keep]
+            keep=np.isfinite(z.ravel())
+            if getProjection:
+                return x.ravel()[keep], y.ravel()[keep], z.ravel()[keep], proj
+            else:
+                return x.ravel()[keep], y.ravel()[keep], z.ravel()[keep]
     else:
         if getProjection:
             return x, y[::-1], z[::-1, :], proj
         else:
             return x, y[::-1], z[::-1, :]
-        
- 
+
