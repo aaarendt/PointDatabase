@@ -15,7 +15,7 @@ from osgeo import osr
 import matplotlib.pyplot as plt
 from PointDatabase.ATL06_data import ATL06_data
 from IS2_calval.qfit_data import Qfit_data
-from PointDatabase import read_DEM
+from PointDatabase import read_DEM, get_WV_date
 from PointDatabase.point_data import point_data
 
 class geo_index(dict):
@@ -238,7 +238,9 @@ class geo_index(dict):
             if D.latitude.shape[0] > 0:
                 self.from_latlon(D.latitude, D.longitude,  filename, 'ATM_waveform', number=number)
         if file_type in ['filtered_DEM', 'DEM'] :
-            D=read_DEM(filename=filename, asPoints=True)
+            D=dict()
+            D['x'],D['y'],D['z']=read_DEM(filename=filename, asPoints=True)
+            D=point_data().from_dict(D)
             D.index(D, np.isfinite(D.z))
             if D.size > 0:
                 self.from_xy(D.x, D.y, filename, file_type, number=number)
@@ -471,18 +473,26 @@ def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, di
             else:
                 out_data.append(WF_temp)
         if result['type'] == 'DEM':
-            out_data.append(read_DEM(filename=this_file, asPoints=True))
+            D=dict()
+            D['x'],D['y'],D['z']=read_DEM(filename=this_file, asPoints=True)
+            D['time']=np.zeros_like(D['x'])+get_WV_date(this_file)
+            D=point_data().from_dict(D)
+            D.index(D, np.isfinite(D.z))
+            out_data.append(D)
         if result['type'] == 'filtered_DEM':
-            temp =read_DEM(filename=this_file, asPoints=True, band=1)
-            temp1=read_DEM(filename=this_file, asPoints=True, band=2)
-            temp.assign({'sigma':temp1.z})
+            D=dict()
+            D['x'],D['y'],D['z'] =read_DEM(filename=this_file, asPoints=True, band=1, keepAll=True)
+            D['x'],D['y'],D['sigma'] =read_DEM(filename=this_file, asPoints=True, band=2, keepAll=True)
+            D['time'] = np.zeros_like(D['x'])+get_WV_date(this_file)
+            D=point_data().from_dict(D)
+            D.index(D, np.isfinite(D.z) & np.isfinite(D.sigma))
             out_data.append(temp)
         if result['type'] == 'indexed_h5':
             out_data += [read_indexed_h5_file(this_file, [result['x'], result['y']],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
         if result['type'] == 'indexed_h5_from_matlab':
             out_data += [read_indexed_h5_file(this_file, [result['x']/1000, result['y']/1000],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
         if result['type'] is None:
-            out_data=[data.subset(np.arange(temp[0], temp[1])) for temp in zip(result['offset_start'], result['offset_end'])]  
+            out_data=[data.subset(np.arange(temp[0], temp[1])) for temp in zip(result['offset_start'], result['offset_end'])]
     return out_data
 
 def unique_points(xy, delta=[1, 1]):
@@ -559,7 +569,7 @@ def read_indexed_h5_file(filename, xy_bin,  fields=['x','y','time'], index_range
                     elif len(temp)==0:
                         out_data[field]=np.zeros(0)
                     elif len(temp)==1:
-                        out_data[field]=temp[0]                         
+                        out_data[field]=temp[0]
                 except ValueError:
                     print("ValueError!")
             else:
