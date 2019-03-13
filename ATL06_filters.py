@@ -65,3 +65,13 @@ def qualitySummary(D6, includeDensity=False, setValid=True, includeSigSource=Fal
         D6.subset(np.all(atl06QualitySummary, axis=1))
 
     return atl06QualitySummary
+
+def fpb_glitch_filter(D6,setValid=True, includeSigSource=False, toNaN=False, subset=False):
+    good=D6.n_fit_photons <= D6.fpb_n_corr
+    if setValid:
+        D6.valid=D6.valid & good
+    if toNaN:
+        D6.h_li[good==0]=np.NaN
+    if subset:
+        D6.subset(np.any(good), axis=1)
+    return good
