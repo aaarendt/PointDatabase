@@ -15,7 +15,8 @@ from osgeo import osr
 import matplotlib.pyplot as plt
 from PointDatabase.ATL06_data import ATL06_data
 from IS2_calval.qfit_data import Qfit_data
-from PointDatabase import read_DEM, get_WV_date
+from PointDatabase import read_DEM
+from PointDatabase.WV_date import WV_year
 from PointDatabase.point_data import point_data
 
 class geo_index(dict):
@@ -475,7 +476,7 @@ def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, di
         if result['type'] == 'DEM':
             D=dict()
             D['x'],D['y'],D['z']=read_DEM(filename=this_file, asPoints=True)
-            D['time']=np.zeros_like(D['x'])+get_WV_date(this_file)
+            D['time']=np.zeros_like(D['x'])+WV_year(this_file)
             D=point_data().from_dict(D)
             D.index(D, np.isfinite(D.z))
             out_data.append(D)
@@ -483,7 +484,7 @@ def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, di
             D=dict()
             D['x'],D['y'],D['z'] =read_DEM(filename=this_file, asPoints=True, band=1, keepAll=True)
             D['x'],D['y'],D['sigma'] =read_DEM(filename=this_file, asPoints=True, band=2, keepAll=True)
-            D['time'] = np.zeros_like(D['x'])+get_WV_date(this_file)
+            D['time'] = np.zeros_like(D['x'])+WV_year(this_file)
             D=point_data().from_dict(D)
             D.index(D, np.isfinite(D.z) & np.isfinite(D.sigma))
             out_data.append(temp)
