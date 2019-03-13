@@ -15,6 +15,7 @@ from osgeo import osr
 import matplotlib.pyplot as plt
 from PointDatabase.ATL06_data import ATL06_data
 from IS2_calval.qfit_data import Qfit_data
+from PointDatabase import read_DEM
 from PointDatabase.point_data import point_data
 
 class geo_index(dict):
@@ -236,6 +237,11 @@ class geo_index(dict):
             D=Qfit_data(filename=filename, waveform_format=True)
             if D.latitude.shape[0] > 0:
                 self.from_latlon(D.latitude, D.longitude,  filename, 'ATM_waveform', number=number)
+        if file_type in ['filtered_DEM', 'DEM'] :
+            D=read_DEM(filename=filename, asPoints=True)
+            D.index(D, np.isfinite(D.z))
+            if D.size > 0:
+                self.from_xy(D.x, D.y, filename, file_type, number=number)
         if file_type in ['h5_geoindex']:
             # read the file as a collection of points
             temp_GI=geo_index().from_file(filename)
@@ -464,6 +470,13 @@ def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, di
                 out_data += WF_temp
             else:
                 out_data.append(WF_temp)
+        if result['type'] == 'DEM':
+            out_data.append(read_DEM(filename=this_file, asPoints=True))
+        if result['type'] == 'filtered_DEM':
+            temp =read_DEM(filename=this_file, asPoints=True, band=1)
+            temp1=read_DEM(filename=this_file, asPoints=True, band=2)
+            temp.assign({'sigma':temp1.z})
+            out_data.append(temp)
         if result['type'] == 'indexed_h5':
             out_data += [read_indexed_h5_file(this_file, [result['x'], result['y']],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
         if result['type'] == 'indexed_h5_from_matlab':
