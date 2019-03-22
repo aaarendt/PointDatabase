@@ -12,10 +12,10 @@ def WV_date(filename):
     m=date_re.search(filename)
     if m is None:
         return np.NaN
-    return date(m.group(1), m.group(2), m.group(3))
+    return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     
 def WV_year(filename):
     this_date=WV_date(filename)
-    this_delta=this_date-date(2000., 1., 1.)    
-    return this_delta.days/365.25
+    this_delta=this_date-date(2000, 1, 1)    
+    return 2000+this_delta.days/365.25
     
