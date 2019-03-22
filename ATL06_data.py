@@ -182,7 +182,9 @@ class ATL06_data:
         if proj4_string is None and EPSG is not None:
             out_srs.ImportFromProj4(EPSG)
         else:
-            out_srs.ImportFromProj4(proj4_string)
+            projError= out_srs.ImportFromProj4(proj4_string)
+            if projError > 0:
+                out_srs.ImportFromWkt(proj4_string)
         ll_srs=osr.SpatialReference()
         ll_srs.ImportFromEPSG(4326)
         ct=osr.CoordinateTransformation(ll_srs, out_srs)
