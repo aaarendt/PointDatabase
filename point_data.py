@@ -112,7 +112,9 @@ class point_data(object):
         if proj4_string is None and EPSG is not None:
             out_srs.ImportFromProj4(EPSG)
         else:
-            out_srs.ImportFromProj4(proj4_string)
+            errCode=out_srs.ImportFromProj4(proj4_string)
+            if errCode > 0:
+                errCode=out_srs.ImportFromWkt(proj4_string)
         ll_srs=osr.SpatialReference()
         ll_srs.ImportFromEPSG(4326)
         ct=osr.CoordinateTransformation(ll_srs, out_srs)
@@ -121,6 +123,8 @@ class point_data(object):
             self.y=np.zeros_like(self.latitude)
         else:
             x, y, z= list(zip(*[ct.TransformPoint(*xyz) for xyz in zip(np.ravel(self.longitude), np.ravel(self.latitude), np.zeros_like(np.ravel(self.latitude)))]))
+            #x, y= list(zip(*[ct.TransformPoint(*xy) for xy in zip(np.ravel(self.longitude), np.ravel(self.latitude))]))
+            
             self.x=np.reshape(x, self.latitude.shape)
             self.y=np.reshape(y, self.longitude.shape)
         if 'x' not in self.list_of_fields:
