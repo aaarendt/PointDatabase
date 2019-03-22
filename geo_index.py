@@ -15,7 +15,7 @@ from osgeo import osr
 import matplotlib.pyplot as plt
 from PointDatabase.ATL06_data import ATL06_data
 from IS2_calval.qfit_data import Qfit_data
-from PointDatabase import read_DEM
+from PointDatabase.read_DEM import read_DEM
 from PointDatabase.WV_date import WV_year
 from PointDatabase.point_data import point_data
 
@@ -42,7 +42,8 @@ class geo_index(dict):
     def __copy__(self):
         # copy method,
         out=geo_index()
-        out.attrs=self.attrs.copy()
+        for attr in self.attrs:
+            out.attrs[attr]=self.attrs[attr]
         for field in self.keys:
             out[field]=self[field].copy()
         out.data=self.data
@@ -127,28 +128,28 @@ class geo_index(dict):
         x, y, z = list(zip(*[ct(*xy) for xy in zip(np.ravel(lon), np.ravel(lat), np.zeros_like(lat).ravel())]))
         return self.from_xy([np.array(x),np.array(y)], filename, file_type, number, fake_offset_val)
 
-    def from_list(self, index_list, copy_first=False):
+    def from_list(self, index_list, dir_root=''):
         # build a geo_index from a list of geo_indices.
         # Each bin in the resulting geo_index contains information for reading
         # the files indexed by the geo_indices in index_list
         if len(index_list)==0:
             return
-        if copy_first:
-            self=index_list[0].copy()
-        else:
-            self.attrs=index_list[0].attrs
-            for bin_name in index_list[0]:
-                self[bin_name]=index_list[0][bin_name]
-
-        fileListTo=[self.attrs['file_%d' % fileNum] for fileNum in range(self.attrs['n_files'])]
-
-        for index in index_list[1:]:
+        for key in ['dir_root', 'SRS_proj4']:
+            if key in index_list[0].attrs:
+                self.attrs[key]=index_list[0].attrs[key]
+        if len(dir_root) > 0:
+            self.attrs['dir_root']=dir_root
+        # make a list of files in the destination index (self)
+        fileListTo=list()
+       
+        for index in index_list:
             # check if a particular input file is alread in the output index, otherwise add it
             # keep track of how the filenames in the input index correspond to those in the output index
             num_out=dict()
             alreadyIn=list()
             for fileNum in range(index.attrs['n_files']):
                 thisFileName=index.attrs['file_%d' % fileNum]
+                thisFileName=thisFileName.replace(dir_root,'')
                 thisFileType=index.attrs['type_%d' % fileNum]
                 if thisFileName not in fileListTo:
                     fileListTo.append(thisFileName)
@@ -157,19 +158,25 @@ class geo_index(dict):
                 else:
                     alreadyIn.append(fileNum)
                 num_out[fileNum]=fileListTo.index(thisFileName)
+            # loop bver the bins in the current index
             for bin in index.keys():
+                # If a particular filename is already in fileListTo, its corresponding
+                # number is in alreadIn, and we'll skip it for this bin so we don't
+                # end up with duplicate data
                 newFileNums=index[bin]['file_num'].copy()
                 keep=np.logical_not(np.in1d(newFileNums, alreadyIn))
                 if not np.any(keep):
                     continue
                 newFileNums=newFileNums[keep]
                 for row in range(newFileNums.shape[0]):
+                    # translate the newFileNums to the file numbers for the output index
                     newFileNums[row]=num_out[newFileNums[row]]
+                # if the bin is alreay in self, copy the infomation to it
                 if bin in self:
-                    #append_data(self[bin]['file_num'], newFileNums)
                     append_data(self[bin],'file_num', newFileNums)
                     for field in ('offset_start','offset_end'):
-                        append_data(self[bin], field, index[bin][field][keep])
+                        append_data(self[bin], field, index[bin][field][keep])                        
+                # Otherwise, make a new bin in self
                 else:
                     self[bin]=dict()
                     self[bin]['file_num']=newFileNums
@@ -221,37 +228,35 @@ class geo_index(dict):
         # make a geo_index for file 'filename'
         if dir_root is not None:
             # eliminate the string in 'dir_root' from the filename
-            filename=filename.replace(dir_root,'')
+            filename_out=filename.replace(dir_root,'')
         if file_type in ['ATL06']:
             temp=list()
             this_field_dict={None:('latitude','longitude','h_li','delta_time')}
             for beam_pair in (1, 2, 3):
                 D=ATL06_data(beam_pair=beam_pair, field_dict=this_field_dict).from_file(filename).get_xy(self.attrs['SRS_proj4'])
                 if D.latitude.shape[0] > 0:
-                    temp.append(geo_index(delta=self.attrs['delta'], SRS_proj4=self.attrs['SRS_proj4']).from_xy([np.nanmean(D.x, axis=1), np.nanmean(D.y, axis=1)], '%s:pair%d' % (filename, beam_pair), 'ATL06', number=number))
+                    temp.append(geo_index(delta=self.attrs['delta'], SRS_proj4=self.attrs['SRS_proj4']).from_xy([np.nanmean(D.x, axis=1), np.nanmean(D.y, axis=1)], '%s:pair%d' % (filename_out, beam_pair), 'ATL06', number=number))
             self.from_list(temp)
         if file_type in ['ATM_Qfit']:
             D=Qfit_data(filename=filename, field_dict={'latitiude','longitude', 'time'})
             if D.latitude.shape[0] > 0:
-                self.from_latlon(D.latitude, D.longitude,  filename, 'ATM_Qfit', number=number)
+                self.from_latlon(D.latitude, D.longitude,  filename_out, 'ATM_Qfit', number=number)
         if file_type in ['ATM_waveform']:
             D=Qfit_data(filename=filename, waveform_format=True)
             if D.latitude.shape[0] > 0:
-                self.from_latlon(D.latitude, D.longitude,  filename, 'ATM_waveform', number=number)
+                self.from_latlon(D.latitude, D.longitude,  filename_out, 'ATM_waveform', number=number)
         if file_type in ['filtered_DEM', 'DEM'] :
             D=dict()
-            D['x'],D['y'],D['z']=read_DEM(filename=filename, asPoints=True)
-            D=point_data().from_dict(D)
-            D.index(D, np.isfinite(D.z))
-            if D.size > 0:
-                self.from_xy(D.x, D.y, filename, file_type, number=number)
+            D['x'],D['y'],D['z']=read_DEM(filename, asPoints=True)
+            if D['x'].size > 0:
+                self.from_xy((D['x'], D['y']), filename=filename_out, file_type=file_type, number=number)
         if file_type in ['h5_geoindex']:
             # read the file as a collection of points
             temp_GI=geo_index().from_file(filename)
             xy_bin=temp_GI.bins_as_array()
             for attr in temp_GI.attrs.keys():
                 self.attrs[attr]=temp_GI.attrs[attr]
-            self.from_xy(xy_bin, filename, file_type, number=number, fake_offset_val=-1)
+            self.from_xy(xy_bin, filename=filename_out, file_type=file_type, number=number, fake_offset_val=-1)
         if file_type in ['indexed_h5']:
             h5f=h5py.File(filename,'r')
             xy=[np.array(h5f['INDEX']['bin_x']), np.array(h5f['INDEX']['bin_y'])]
@@ -263,14 +268,14 @@ class geo_index(dict):
             else:
                 first_last=None
                 fake_offset=-1
-            self.from_xy(xy, filename=filename, file_type=file_type, number=number, first_last=first_last, fake_offset_val=fake_offset)
+            self.from_xy(xy, filename=filename_out, file_type=file_type, number=number, first_last=first_last, fake_offset_val=fake_offset)
             h5f.close()
         if file_type in ['indexed_h5_from_matlab']:
             h5f=h5py.File(filename,'r')
             xy=[np.array(h5f['INDEX']['bin_x']), np.array(h5f['INDEX']['bin_y'])]
             first_last=None
             fake_offset=-1
-            self.from_xy(xy, filename, file_type, number=number, first_last=first_last, fake_offset_val=fake_offset)
+            self.from_xy(xy, filename_out, file_type, number=number, first_last=first_last, fake_offset_val=fake_offset)
             h5f.close()
 
         return self
@@ -421,13 +426,23 @@ class geo_index(dict):
         result=[p1 for p1 in ['%d_%d' % p0 for p0 in zip(pts[0], pts[1])] if p1 in self]
         return result
 
-def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, dir_root=''):
+def get_data_for_geo_index(query_results, delta=[10000., 10000.], fields=None, data=None, dir_root=''):
     # read the data from a set of query results
     # Currently the function knows how to read h5_geoindex and ATL06 data.
     # Append more cases as needed
     if len(dir_root)>0:
         dir_root += '/'
     out_data=list()
+    # if we are querying any DEM data, work out the bounds of the query so we don't have to read the whole DEMs
+    all_types=[query_results[key]['type'] for key in query_results]
+    if 'DEM' in all_types or 'filtered_DEM' in all_types:
+        all_x=list()
+        all_y=list()
+        for key, result in query_results.items():
+            all_x += result['x'].tolist()
+            all_y += result['y'].tolist()
+        bounds=[[np.min(all_x)-delta[0]/2, np.max(all_x)+delta[0]/2], [np.min(all_y)-delta[1]/2, np.max(all_y)+delta[1]/2]]
+    
     for file_key, result in query_results.items():
         #print(result.__class__)
         if dir_root is not None:
@@ -475,19 +490,19 @@ def get_data_for_geo_index(query_results, delta=None, fields=None, data=None, di
                 out_data.append(WF_temp)
         if result['type'] == 'DEM':
             D=dict()
-            D['x'],D['y'],D['z']=read_DEM(filename=this_file, asPoints=True)
+            D['x'],D['y'],D['z']=read_DEM(filename=this_file, asPoints=True, bounds=bounds)
             D['time']=np.zeros_like(D['x'])+WV_year(this_file)
             D=point_data().from_dict(D)
             D.index(D, np.isfinite(D.z))
             out_data.append(D)
         if result['type'] == 'filtered_DEM':
             D=dict()
-            D['x'],D['y'],D['z'] =read_DEM(filename=this_file, asPoints=True, band=1, keepAll=True)
-            D['x'],D['y'],D['sigma'] =read_DEM(filename=this_file, asPoints=True, band=2, keepAll=True)
+            D['x'],D['y'],D['z'] =read_DEM(this_file, asPoints=True, band_num=1, keepAll=True, bounds=bounds)
+            D['x'],D['y'],D['sigma'] =read_DEM(this_file, asPoints=True, band_num=2, keepAll=True, bounds=bounds)
             D['time'] = np.zeros_like(D['x'])+WV_year(this_file)
             D=point_data().from_dict(D)
-            D.index(D, np.isfinite(D.z) & np.isfinite(D.sigma))
-            out_data.append(temp)
+            D.index(np.isfinite(D.z) & np.isfinite(D.sigma))
+            out_data.append(D)
         if result['type'] == 'indexed_h5':
             out_data += [read_indexed_h5_file(this_file, [result['x'], result['y']],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
         if result['type'] == 'indexed_h5_from_matlab':
