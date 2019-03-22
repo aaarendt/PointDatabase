@@ -209,7 +209,12 @@ class geo_index(dict):
         if 'index' in indexF:
             del indexF['index']
         indexGrp=indexF.create_group('index')
-        indexGrp.attrs['n_files'] = 0
+        if 'n_files' in self.attrs:
+            indexGrp.attrs['n_files'] = self.attrs['n_files']
+        else:
+            indexGrp.attrs['n_files']=0
+        if 'dir_root' in self.attrs:
+            indexGrp.attrs['dir_root']=self.attrs['dir_root']
         indexGrp.attrs['delta'] = self.attrs['delta']
         indexGrp.attrs['SRS_proj4'] = self.attrs['SRS_proj4']
         for key in self.keys():
