@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from PointDatabase.ATL06_data import ATL06_data
 from IS2_calval.qfit_data import Qfit_data
 from PointDatabase.read_DEM import read_DEM
-from PointDatabase.WV_date import WV_year
+from PointDatabase.WV_date import WV_MatlabDate
 from PointDatabase.point_data import point_data
 
 class geo_index(dict):
@@ -433,7 +433,12 @@ class geo_index(dict):
 
 def get_data_for_geo_index(query_results, delta=[10000., 10000.], fields=None, data=None, dir_root=''):
     # read the data from a set of query results
-    # Currently the function knows how to read h5_geoindex and ATL06 data.
+    # Currently the function knows how to read:
+    # h5_geoindex 
+    # indexed h5s 
+    # Qfit data (waveform and plain)
+    # DEM data (filtered and not)
+    # ATL06 data.
     # Append more cases as needed
     if len(dir_root)>0:
         dir_root += '/'
@@ -449,7 +454,6 @@ def get_data_for_geo_index(query_results, delta=[10000., 10000.], fields=None, d
         bounds=[[np.min(all_x)-delta[0]/2, np.max(all_x)+delta[0]/2], [np.min(all_y)-delta[1]/2, np.max(all_y)+delta[1]/2]]
     
     for file_key, result in query_results.items():
-        #print(result.__class__)
         if dir_root is not None:
             try:
                 this_file = dir_root+file_key
@@ -458,62 +462,53 @@ def get_data_for_geo_index(query_results, delta=[10000., 10000.], fields=None, d
         else:
             this_file=file_key
         if result['type'] == 'h5_geoindex':
-            temp=geo_index().from_file(this_file).query_xy((result['x'], result['y']), fields=fields, get_data=True, dir_root=dir_root)
-            if isinstance(temp, list):
-                out_data += temp
-            else:
-                out_data.append(temp)
+            D=geo_index().from_file(this_file).query_xy((result['x'], result['y']), fields=fields, get_data=True, dir_root=dir_root)
         if result['type'] == 'ATL06':
             if fields is None:
                 fields={None:(u'latitude',u'longitude',u'h_li',u'delta_time')}
             D6_file, pair=this_file.split(':pair')
-            #print("D6_file=%s"% D6_file)
             if isinstance(fields, dict):
                 field_dict=fields
                 field_list=None
             else:
                 field_dict=None
                 field_list=fields
-            D6=[ATL06_data(beam_pair=int(pair), list_of_fields=field_list, field_dict=field_dict).from_file(\
+            D=[ATL06_data(beam_pair=int(pair), list_of_fields=field_list, field_dict=field_dict).from_file(\
                 filename=D6_file, index_range=np.array(temp)) \
-                for temp in zip(result['offset_start'], result['offset_end'])]
-            if isinstance(D6,list):
-                out_data += D6
-            else:
-                data.append(D6)
+                for temp in zip(result['offset_start'], result['offset_end'])]            
         if result['type'] == 'ATM_Qfit':
-            Qfit_temp=[Qfit_data(filename=this_file, index_range=np.array(temp)) for temp in zip(result['offset_start'], result['offset_end'])]
-            if isinstance(Qfit_temp,list):
-                out_data += Qfit_temp
-            else:
-                out_data.append(Qfit_temp)
+            D=[Qfit_data(filename=this_file, index_range=np.array(temp)) for temp in zip(result['offset_start'], result['offset_end'])]
         if result['type'] == 'ATM_waveform':
-            WF_temp=[Qfit_data(filename=this_file, index_range=np.array(temp), waveform_format=True) for temp in zip(result['offset_start'], result['offset_end'])]
-            if isinstance(WF_temp, list):
-                out_data += WF_temp
-            else:
-                out_data.append(WF_temp)
+            D=[Qfit_data(filename=this_file, index_range=np.array(temp), waveform_format=True) for temp in zip(result['offset_start'], result['offset_end'])]
         if result['type'] == 'DEM':
             D=dict()
             D['x'],D['y'],D['z']=read_DEM(filename=this_file, asPoints=True, bounds=bounds)
-            D['time']=np.zeros_like(D['x'])+WV_year(this_file)
+            D['time']=np.zeros_like(D['x'])+WV_MatlabDate(this_file)
             D=point_data().from_dict(D)
             D.index(D, np.isfinite(D.z))
-            out_data.append(D)
         if result['type'] == 'filtered_DEM':
             D=dict()
             D['x'],D['y'],D['z'] =read_DEM(this_file, asPoints=True, band_num=1, keepAll=True, bounds=bounds)
             D['x'],D['y'],D['sigma'] =read_DEM(this_file, asPoints=True, band_num=2, keepAll=True, bounds=bounds)
-            D['time'] = np.zeros_like(D['x'])+WV_year(this_file)
+            D['time'] = np.zeros_like(D['x'])+WV_MatlabDate(this_file)
             D=point_data().from_dict(D)
             D.index(np.isfinite(D.z) & np.isfinite(D.sigma))
-            out_data.append(D)
         if result['type'] == 'indexed_h5':
-            out_data += [read_indexed_h5_file(this_file, [result['x'], result['y']],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
+            D = [read_indexed_h5_file(this_file, [result['x'], result['y']],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
         if result['type'] == 'indexed_h5_from_matlab':
-            out_data += [read_indexed_h5_file(this_file, [result['x']/1000, result['y']/1000],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
+            D = [read_indexed_h5_file(this_file, [result['x']/1000, result['y']/1000],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
         if result['type'] is None:
-            out_data=[data.subset(np.arange(temp[0], temp[1])) for temp in zip(result['offset_start'], result['offset_end'])]
+            D = [data.subset(np.arange(temp[0], temp[1])) for temp in zip(result['offset_start'], result['offset_end'])]
+        # add data to list of results.  May be a list or a single result
+        if isinstance(D,list):
+            for Di in D:
+                if Di.filename is None:
+                    Di.filename=this_file
+            out_data += D
+        else:
+            if D.filename is None:
+                D.filename=this_file
+            out_data.append(D)
     return out_data
 
 def unique_points(xy, delta=[1, 1]):
