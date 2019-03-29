@@ -18,4 +18,14 @@ def WV_year(filename):
     this_date=WV_date(filename)
     this_delta=this_date-date(2000, 1, 1)    
     return 2000+this_delta.days/365.25
+
+def WV_MatlabDate(filename):
+    # matlab date gives days relative to date 0 0 0.  The earliest date that 
+    # a datetime can handle is 1, 1, 1, and the difference between the two is 
+    # 367 days.
+    this_date=WV_date(filename)
+    this_delta=this_date-date(1, 1, 1)
+    this_delta=this_delta.days+this_delta.seconds/24./3600.+367.
+    return this_delta
+    
     
