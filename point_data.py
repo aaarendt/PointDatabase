@@ -33,6 +33,7 @@ class point_data(object):
         self.columns=columns
         self.shape=None
         self.size=None
+        self.filename=None
 
     def __default_field_dict__(self):
         """
@@ -60,6 +61,10 @@ class point_data(object):
         return self
     
     def copy(self):
+        """ 
+        I do not know why this is necessary, but the copy method does not work
+        without it
+        """
         return self.__copy__()
     
     def copy_attrs(self):
@@ -179,20 +184,23 @@ class point_data(object):
             by_row=True
         if datasets is None:
             datasets=self.list_of_fields
-        for field in datasets:
-            temp_field=self.__dict__[field]
-            try:
-                if temp_field.size==0 :
-                    continue
-                if temp_field.ndim ==1:
-                    dd[field]=temp_field[index]
-                else:
-                    if by_row is not None and by_row:
-                        dd[field]=temp_field[index,:]
+        if (len(index) == 0) or ( (index.dtype == 'bool') and np.all(index==0)):
+            dd={key:np.empty for key in datasets}
+        else:              
+            for field in datasets:          
+                temp_field=self.__dict__[field]
+                try:
+                    if temp_field.size==0 :
+                        continue
+                    if temp_field.ndim ==1:
+                        dd[field]=temp_field[index]
                     else:
-                        dd[field]=temp_field.ravel()[index.ravel()]
-            except IndexError:
-                print("IndexError")
+                        if by_row is not None and by_row:
+                            dd[field]=temp_field[index,:]
+                        else:
+                            dd[field]=temp_field.ravel()[index.ravel()]
+                except IndexError:
+                    print("IndexError")
         return self.copy_attrs().from_dict(dd, list_of_fields=datasets)
 
     def to_file(self, fileOut):
