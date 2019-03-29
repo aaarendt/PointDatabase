@@ -10,7 +10,7 @@ import argparse
 from osgeo import gdal, gdalconst, osr
 import numpy as np
 
-def demBounds(demFile, EPSG=4326, proj4=None):
+def demBounds(demFile, native=True, EPSG=4326, proj4=None):
     """
         Get the extent of a DEM file
     """   
@@ -25,6 +25,8 @@ def demBounds(demFile, EPSG=4326, proj4=None):
     jj=np.array([0, band.YSize])-0.5
     x=GT[0]+GT[1]*ii
     y=GT[3]+GT[5]*jj    
+    if native:
+        return np.array([np.min(x), np.max(x)]), np.array([np.min(y), np.max(y)])
     # calculate the projection from latlon to the DEM CS
     outRef = osr.SpatialReference()
     if proj4 is None:
