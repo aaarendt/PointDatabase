@@ -38,7 +38,7 @@ class ATL06_data:
             for group in self.field_dict.keys():
                 for field in self.field_dict[group]:
                     list_of_fields.append(field)
-                    
+        self.filename=None            
         self.beam_pair=beam_pair
         self.beam_type=['weak','strong'] # defaults for the early part of the mission
         self.orbit=np.NaN
@@ -135,6 +135,11 @@ class ATL06_data:
                     elif group is "derived" and field is "valid":
                         data=np.ones((index_range[1]-index_range[0], 2), dtype='bool')
                         bad_val=0
+                    elif group is "derived" and field is "BP":
+                        data=np.zeros((index_range[1]-index_range[0], 2))+self.beam_pair
+                        bad_val=0
+                    elif group is "derived":
+                        continue
                     else:
                         
                         # All other groups are under the land_ice_segments/group hirearchy
@@ -160,10 +165,11 @@ class ATL06_data:
                 except KeyError:
                     print("could not read %s/%s" % (group, field))
                     setattr(self, field, np.zeros( [n_vals, 2])+np.NaN)
-        if 'atl06_quality_summary' in self.list_of_fields:
-            # add a non-broken version of the atl06 quality summary                    
-            setattr(self, 'atl06_quality_summary', (self.h_li_sigma > 1) | (self.h_robust_sprd > 1) | (self.snr_significance > 0.02))
-        h5_f.close()
+#        if 'atl06_quality_summary' in self.list_of_fields:
+#            # add a non-broken version of the atl06 quality summary                    
+#            setattr(self, 'atl06_quality_summary', (self.h_li_sigma > 1) | (self.h_robust_sprd > 1) | (self.snr_significance > 0.02))        
+        if "derived" in self.field_dict and "matlab_time" in self.field_dict['derived']:
+            self.get_Matlab_time()
         self.__update_size_and_shape__()
         # assign fields that must be copied from single-value attributes in the 
         # h5 file
@@ -174,6 +180,7 @@ class ATL06_data:
             except KeyError:
                 cycle_number=-9999
             setattr(self, 'cycle_number', cycle_number+np.zeros(self.shape, dtype=np.float64))
+        h5_f.close()
         return self
     
     def get_xy(self, proj4_string, EPSG=None):
@@ -208,6 +215,24 @@ class ATL06_data:
         self.__update_size_and_shape__()    
         return self
 
+    def assign(self, D):
+        """
+        Assign fields from a dictionary to self
+        """
+        for key in D:
+            setattr(self, key, D[key])
+            if key not in self.list_of_fields:
+                self.list_of_fields.append(key)
+        return self
+    
+    def ravel_fields(self):
+        """
+        ravel all the fields in self
+        """
+        for field in self.list_of_fields:
+            setattr(self, field, getattr(self, field).ravel())
+        return self
+    
     def from_list(self, D6_list):
         """
         Append the fields of several ATL06_data instances.
@@ -251,10 +276,13 @@ class ATL06_data:
         if datasets is None:
             datasets=self.list_of_fields
         for field in datasets:
-            if by_row is not None and by_row:
-                dd[field]=getattr(self, field)[index,:]
-            else:
-                dd[field]=getattr(self, field)[index,:].ravel()[index]
+            try:
+                if by_row is not None and by_row:
+                    dd[field]=getattr(self, field)[index,:]
+                else:
+                    dd[field]=getattr(self, field)[index,:].ravel()[index]
+            except IndexError:
+                print("IndexError")
         return ATL06_data(list_of_fields=datasets, beam_pair=self.beam_pair).from_dict(dd)
     
     def copy(self):
@@ -283,4 +311,9 @@ class ATL06_data:
         all_pairs=ATL06_pair(pair_data=pair_list)
         return all_pairs
 
+    def get_Matlab_time(self):
+        self.assign({'matlab_time': 737061. + self.delta_time/24./3600.})
+
+def delta_t_to_Matlab(delta_t):
+    return 730486 + delta_t/24./3600.
  
