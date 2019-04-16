@@ -14,7 +14,7 @@ import h5py
 from osgeo import osr
 import matplotlib.pyplot as plt
 from PointDatabase.ATL06_data import ATL06_data
-from IS2_calval.qfit_data import Qfit_data
+from PointDatabase.qfit_data import Qfit_data
 from PointDatabase.read_DEM import read_DEM
 from PointDatabase.WV_date import WV_MatlabDate
 from PointDatabase.point_data import point_data
@@ -243,7 +243,7 @@ class geo_index(dict):
                     temp.append(geo_index(delta=self.attrs['delta'], SRS_proj4=self.attrs['SRS_proj4']).from_xy([np.nanmean(D.x, axis=1), np.nanmean(D.y, axis=1)], '%s:pair%d' % (filename_out, beam_pair), 'ATL06', number=number))
             self.from_list(temp)
         if file_type in ['ATM_Qfit']:
-            D=Qfit_data(filename=filename, field_dict={'latitiude','longitude', 'time'})
+            D=Qfit_data(filename=filename, list_of_fields=['latitiude','longitude', 'time'])
             if D.latitude.shape[0] > 0:
                 self.from_latlon(D.latitude, D.longitude,  filename_out, 'ATM_Qfit', number=number)
         if file_type in ['ATM_waveform']:
