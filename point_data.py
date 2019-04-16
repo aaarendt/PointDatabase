@@ -68,7 +68,15 @@ class point_data(object):
         return self.__copy__()
     
     def copy_attrs(self):
-        return point_data(list_of_fields=self.list_of_fields, SRS_proj4=self.SRS_proj4, columns=self.columns)
+        out=point_data()
+        for field in ['list_of_fields', 'SRS_proj4','columns']:
+            temp=getattr(self, field)
+            if temp is not None:
+                try:
+                    setattr(out, field, temp.copy())
+                except AttributeError:
+                    setattr(out, field, temp)
+        return out
 
     def from_file(self, filename, field_dict=None, index_range=None):
         h5_f=h5py.File(filename, 'r')
