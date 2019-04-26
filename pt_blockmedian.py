@@ -7,7 +7,11 @@ Created on Thu Sep  6 15:44:31 2018
 
 import numpy as np
 import matplotlib.pyplot as plt
-def pt_blockmedian(x, y, z, delta, xy0=[0.,0.], return_index=False):
+def pt_blockmedian(xx, yy, zz, delta, xy0=[0.,0.], return_index=False):
+    temp=np.isfinite(zz)
+    x=xx[temp]
+    y=yy[temp]
+    z=zz[temp]
     yscale=np.ceil((np.nanmax(y)-np.nanmin(y))/delta*1.1)
     zscale=(np.nanmax(z)-np.nanmin(z))*1.1
     xr=np.floor((x-xy0[0])/delta)
