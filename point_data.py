@@ -78,44 +78,51 @@ class point_data(object):
                     setattr(out, field, temp)
         return out
 
-    def from_file(self, filename, field_dict=None, index_range=None):
-        h5_f=h5py.File(filename, 'r')
-        nan_fields=list()
-        if field_dict is None:
-            field_dict=self.field_dict
-        # make a slice out of whatever was provided in index_range
-        if index_range is None:
-            ind=slice(None)
-        else:
-            ind=slice(*index_range)
-
-        for group in field_dict.keys():
-            for field in field_dict[group]:
-                if field not in self.list_of_fields:
-                    self.list_of_fields.append(field)
-                try:
-                    if group is None:
-                        if self.columns==0 or self.columns is None:
-                            setattr(self, field, np.array(h5_f[field][ind]).transpose())
+    def from_file(self, filename, group=None, field_dict=None, index_range=None):
+        with h5py.File(filename, 'r') as h5_f:
+            nan_fields=list()
+            if field_dict is None:
+                if group is not None:                
+                    # build the field dict from the group
+                    if not isinstance(group, (list, tuple)):
+                        group=[group]
+                    for this_group in group:
+                        field_dict={this_group: [key for key in h5_f[this_group].keys()]}
+                else:
+                    field_dict=self.field_dict
+            # make a slice out of whatever was provided in index_range
+            if index_range is None:
+                ind=slice(None)
+            else:
+                ind=slice(*index_range)
+    
+            for group in field_dict.keys():
+                for field in field_dict[group]:
+                    if field not in self.list_of_fields:
+                        self.list_of_fields.append(field)
+                    try:
+                        if group is None:
+                            if self.columns==0 or self.columns is None:
+                                setattr(self, field, np.array(h5_f[field][ind]).transpose())
+                            else:
+                                setattr(self, field, np.array(h5_f[field][:,ind]).transpose())
                         else:
-                            setattr(self, field, np.array(h5_f[field][:,ind]).transpose())
-                    else:
-                        if self.columns==0 or self.columns is None:
-                            setattr(self, field, np.array(h5_f[group][field][ind]).transpose())
-                        else:
-                            setattr(self, field, np.array(h5_f[group][field][:,ind]).transpose())
-                except KeyError:
-                    nan_fields.append(field)
-            # find the first populated field
-        if len(nan_fields) > 0:
-            for field in self.list_of_fields:
-                if hasattr(self, field):
-                    self.shape=getattr(self, field).shape
-                    break
-            if self.shape is not None:
-                for field in nan_fields:
-                    setattr(self, field, np.zeros(self.shape)+np.NaN)
-        h5_f.close()
+                            if self.columns==0 or self.columns is None:
+                                setattr(self, field, np.array(h5_f[group][field][ind]).transpose())
+                            else:
+                                setattr(self, field, np.array(h5_f[group][field][:,ind]).transpose())
+                    except KeyError:
+                        nan_fields.append(field)
+                # find the first populated field
+            if len(nan_fields) > 0:
+                for field in self.list_of_fields:
+                    if hasattr(self, field):
+                        self.shape=getattr(self, field).shape
+                        break
+                if self.shape is not None:
+                    for field in nan_fields:
+                        setattr(self, field, np.zeros(self.shape)+np.NaN)
+            
         self.__update_size_and_shape__()
         return self
 
