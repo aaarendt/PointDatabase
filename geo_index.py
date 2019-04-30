@@ -185,7 +185,7 @@ class geo_index(dict):
         self.attrs['n_files']=len(fileListTo)
         return self
 
-    def from_file(self, index_file, read_file=True):
+    def from_file(self, index_file, read_file=False):
         # read geo_index info from file 'index_file.'
         # If read_file is set to False, the file is not read, but the
         # h5_file_index attribute of the resulting geo_index is set to a
