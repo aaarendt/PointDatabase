@@ -223,7 +223,7 @@ class point_data(object):
             os.remove(fileOut)
         h5f_out=h5py.File(fileOut,'w')
         for field in self.list_of_fields:
-            h5f_out.create_dataset(field,data=getattr(self,field))
+            h5f_out.create_dataset(field,data=getattr(self,field),  compression="gzip")
         h5f_out.close()
 
     def assign(self,d):
