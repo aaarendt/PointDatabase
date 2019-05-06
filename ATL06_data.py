@@ -138,10 +138,19 @@ class ATL06_data:
                     elif group is "derived" and field is "BP":
                         data=np.zeros((index_range[1]-index_range[0], 2))+self.beam_pair
                         bad_val=0
+                    elif group is "derived" and field is "LR":
+                        data=np.ones((index_range[1]-index_range[0], 2))
+                        data[:,0]=0
+                        bad_val=-9999
+                    elif group is "derived" and field is "n_pixels":
+                        if self.beam_type[0]=='weak':
+                            data=np.tile([4, 16], [n_vals, 1])
+                        else:
+                            data=np.tile([16, 4], [n_vals, 1])
+                        bad_val=-9999
                     elif group is "derived":
                         continue
-                    else:
-                        
+                    else:                       
                         # All other groups are under the land_ice_segments/group hirearchy
                          try:
                             bad_val=h5_f[beam_names[0]]['land_ice_segments'][group][field].attrs['_FillValue']
@@ -153,7 +162,7 @@ class ATL06_data:
                                 np.array(h5_f[beam_names[0]]['land_ice_segments'][group][field][index_range[0]:index_range[1]]).transpose(),  
                                 np.array(h5_f[beam_names[1]]['land_ice_segments'][group][field][index_range[0]:index_range[1]]).transpose()]
                          except KeyError:
-                             print("missing hdf field for land_ice_segments/%s/%s" % (group, field))
+                             print("missing hdf field for land_ice_segments/%s/%s in %s" % (group, field, filename))
                              data=np.zeros((index_range[1]+1-index_range[0], 2))+bad_val
                     # identify the bad data elements before converting the field to double
                     bad=data==bad_val
@@ -231,6 +240,7 @@ class ATL06_data:
         """
         for field in self.list_of_fields:
             setattr(self, field, getattr(self, field).ravel())
+        self.__update_size_and_shape__()
         return self
     
     def from_list(self, D6_list):
@@ -264,7 +274,10 @@ class ATL06_data:
         Select a subset of rows within a given ATL06_data instance (modify in place)
         """
         for field in self.list_of_fields:
-            setattr(self, field, getattr(self, field)[rows,:])
+            if len(self.shape) > 1:
+                setattr(self, field, getattr(self, field)[rows,:])
+            else:
+                setattr(self, field, getattr(self, field)[rows])
         self.__update_size_and_shape__()
         return self
         
