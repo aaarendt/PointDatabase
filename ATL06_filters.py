@@ -34,9 +34,12 @@ def segDifferenceFilter(D6, tol=2, setValid=True, toNaN=False, subset=False):
     EPplus=D6.h_li + dAT*D6.dh_fit_dx
     EPminus=D6.h_li - dAT*D6.dh_fit_dx
     segDiff=np.zeros_like(D6.h_li)
-    segDiff[0:-1,:]=np.abs(EPplus[0:-1,:]-D6.h_li[1:, :])
-    segDiff[1:,:]=np.maximum(segDiff[1:,:], np.abs(D6.h_li[0:-1,:]-EPminus[1:,:]))
-    
+    if len(D6.h_li.shape)>1:
+        segDiff[0:-1,:]=np.abs(EPplus[0:-1,:]-D6.h_li[1:, :])
+        segDiff[1:,:]=np.maximum(segDiff[1:,:], np.abs(D6.h_li[0:-1,:]-EPminus[1:,:]))
+    else:
+        segDiff[0:-1]=np.abs(EPplus[0:-1]-D6.h_li[1:])
+        segDiff[1:]=np.maximum(segDiff[1:], np.abs(D6.h_li[0:-1]-EPminus[1:]))
     mask=segDiff<tol
     if setValid:
         D6.valid=D6.valid & mask
