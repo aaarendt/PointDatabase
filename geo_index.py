@@ -10,6 +10,7 @@ to allow efficient searches for data.
 Coordinates below are always provided as tuples or lists, the first member of which is an array of x coordinates, the second is an array of y coordinates
 """
 import numpy as np
+import re
 import h5py
 from osgeo import osr
 import matplotlib.pyplot as plt
@@ -136,7 +137,8 @@ class geo_index(dict):
             return
         for key in ['dir_root', 'SRS_proj4']:
             if key in index_list[0].attrs:
-                self.attrs[key]=index_list[0].attrs[key]
+                if index_list[0].attrs[key] is not None:
+                    self.attrs[key]=index_list[0].attrs[key]
         if len(dir_root) > 0:
             self.attrs['dir_root']=dir_root
         # make a list of files in the destination index (self)
@@ -264,15 +266,30 @@ class geo_index(dict):
             self.from_xy(xy_bin, filename=filename_out, file_type=file_type, number=number, fake_offset_val=-1)
         if file_type in ['indexed_h5']:
             h5f=h5py.File(filename,'r')
-            xy=[np.array(h5f['INDEX']['bin_x']), np.array(h5f['INDEX']['bin_y'])]
-            if 'bin_index' in h5f['INDEX']:
-                # this is the type of indexed h5 that has all of the data in single datasets
-                i0_i1=h5f['INDEX']['bin_index']
-                first_last=[i0_i1[0,:].ravel(), i0_i1[1,:].ravel()]
-                fake_offset=None
+            if 'INDEX' in h5f:
+                xy=[np.array(h5f['INDEX']['bin_x']), np.array(h5f['INDEX']['bin_y'])]
+                if 'bin_index' in h5f['INDEX']:
+                    # this is the type of indexed h5 that has all of the data in single datasets
+                    i0_i1=h5f['INDEX']['bin_index']
+                    first_last=[i0_i1[0,:].ravel(), i0_i1[1,:].ravel()]
+                    fake_offset=None
+                else:
+                    first_last=None
+                    fake_offset=-1
             else:
+                # there is no index-- just a bunch of bins, maybe?
                 first_last=None
                 fake_offset=-1
+                bin_re=re.compile("(.*)E_(.*)N");
+                xy=[[], []]
+                for key in h5f:
+                    m=bin_re.match(key)
+                    if m is None: 
+                        continue
+                    xy[0].append(np.float(m.group(1)))
+                    xy[1].append(np.float(m.group(2)))
+                xy[0]=np.array(xy[0])
+                xy[1]=np.array(xy[1])
             self.from_xy(xy, filename=filename_out, file_type=file_type, number=number, first_last=first_last, fake_offset_val=fake_offset)
             h5f.close()
         if file_type in ['indexed_h5_from_matlab']:
@@ -410,7 +427,10 @@ class geo_index(dict):
         if len(self)>0:
             xy_bin=np.c_[[np.fromstring(key, sep='_') for key in self.keys()]]
         else:
-            xy_bin=np.c_[[np.fromstring(key, sep='_') for key in self.h5_file_index.keys()]]
+            try:
+                xy_bin=np.c_[[np.fromstring(key, sep='_') for key in self.h5_file_index.keys()]]
+            except AttributeError:
+                xy_bin=np.zeros(0)
         if xy_bin.size > 0:
             return (xy_bin[:,0].ravel(), xy_bin[:,1].ravel())
         else:
