@@ -169,7 +169,7 @@ class point_data(object):
     def from_list(self, D_list):
         try:
             for field in self.list_of_fields:
-                data_list=[getattr(this_D, field).ravel() for this_D in D_list]
+                data_list=[getattr(this_D, field).ravel() for this_D in D_list if this_D is not None]
                 setattr(self, field, np.concatenate(data_list, 0))
         except TypeError:
             for field in self.list_of_fields:
@@ -200,7 +200,7 @@ class point_data(object):
         if datasets is None:
             datasets=self.list_of_fields
         if (len(index) == 0) or ( (index.dtype == 'bool') and np.all(index==0)):
-            dd={key:np.empty for key in datasets}
+            dd={key:np.zeros([1,0]) for key in datasets}
         else:              
             for field in datasets:          
                 temp_field=self.__dict__[field]
@@ -218,12 +218,18 @@ class point_data(object):
                     print("IndexError")
         return self.copy_attrs().from_dict(dd, list_of_fields=datasets)
 
-    def to_file(self, fileOut):
-        if os.path.isfile(fileOut):
-            os.remove(fileOut)
-        h5f_out=h5py.File(fileOut,'w')
+    def to_file(self, fileOut, replace=True, group='/'):
+        if replace or not os.path.isfile(fileOut):
+            if os.path.isfile(fileOut):
+                os.remove(fileOut)
+            h5f_out=h5py.File(fileOut,'w')
+        else:
+            h5f_out=h5py.File(fileOut,'r+')
+        if group is not None:
+            if not group in h5f_out:
+                h5f_out.create_group(group)
         for field in self.list_of_fields:
-            h5f_out.create_dataset(field,data=getattr(self,field),  compression="gzip")
+            h5f_out.create_dataset(group+'/'+field,data=getattr(self,field),  compression="gzip")
         h5f_out.close()
 
     def assign(self,d):
