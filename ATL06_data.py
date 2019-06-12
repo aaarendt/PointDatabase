@@ -8,7 +8,7 @@ Class to read and manipulate ATL06 data.  Currently set up for Ben-style fake da
 """
 import h5py
 import numpy as np
-from ATL11.ATL06_pair import ATL06_pair
+from PointDatabase.ATL06_pair import ATL06_pair
 from osgeo import osr
 import matplotlib.pyplot as plt 
 
@@ -103,7 +103,7 @@ class ATL06_data:
             except KeyError:
                 pass  # leave the beam type as the default
         if index_range is None or index_range[1]==-1:
-            index_range=[0, h5_f[beam_names[0]]['land_ice_segments']['h_li'].size]
+            index_range=[0, np.minimum(h5_f[beam_names[0]]['land_ice_segments']['h_li'].size, h5_f[beam_names[1]]['land_ice_segments']['h_li'].size)]
         n_vals=index_range[-1]-index_range[0]
         # read the orbit number
         try:
@@ -196,7 +196,7 @@ class ATL06_data:
         # method to get projected coordinates for the data.  Adds 'x' and 'y' fields to the data, optionally returns 'self'
         out_srs=osr.SpatialReference()
         if proj4_string is None and EPSG is not None:
-            out_srs.ImportFromProj4(EPSG)
+            out_srs.ImportFromEPSG(EPSG)
         else:
             projError= out_srs.ImportFromProj4(proj4_string)
             if projError > 0:
@@ -243,10 +243,18 @@ class ATL06_data:
         self.__update_size_and_shape__()
         return self
     
-    def from_list(self, D6_list):
+    def from_list(self, D6_list, copy_fields=True):
         """
         Append the fields of several ATL06_data instances.
         """
+        if copy_fields:
+            fields=[]
+            for D6 in D6_list:
+                try:
+                    fields += D6.list_of_fields
+                except:
+                    pass
+            self.list_of_fields=list(set(fields))
         try:
             for field in self.list_of_fields:
                 data_list=[getattr(this_D6, field) for this_D6 in D6_list]       
