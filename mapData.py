@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as pColors
 import h5py
+import scipy.interpolate as si
 
 class mapData(object):
     def __init__(self):
@@ -152,12 +153,19 @@ class mapData(object):
         self.x=self.x[col_ind]
         self.y=self.y[row_ind]
         if len(self.z.shape) == 2:
-            self.z=self.z[row_ind, col_ind]
+            self.z=self.z[row_ind,:][:, col_ind]
         else:
             self.z=self.z[row_ind,:, :][:, col_ind,:]
         self.extent=[np.min(self.x), np.max(self.x), np.min(self.y), np.max(self.y)]
         return self
-        
+    def subset(self, XR, YR):
+        col_ind=np.where((self.x >= XR[0]) & (self.x <= XR[1]))[0]
+        row_ind=np.where((self.y >= YR[0]) & (self.y <= YR[1]))[0]
+        try:
+            self.index(row_ind, col_ind)
+            return self
+        except:
+            print("HEY!")
     def show(self, ax=None):
         if ax is None:
             h_im=plt.imshow(self.z, extent=self.extent)
@@ -165,7 +173,19 @@ class mapData(object):
             h_im=ax.imshow(self.z, extent=self.extent)
         return h_im
         
-        
-#thefile='/Volumes/ice2/ben/DMS/20180504/DMS_1842637_02317_20180405_12465616.tif'
-#M=mapData().from_geotif(thefile, skip=3).normalize().add_alpha_band(nodata_vals=0)
-#M.show()
+    def interp(self, x, y, gridded=False, band=0):
+        if len(self.z.shape) > 2:
+            z0=self.z[:,:,band]
+        else:
+            z0=self.z.copy()
+        NaN_mask=np.isfinite(z0)==0
+        z0[NaN_mask]=0
+        if self.y[1]> self.y[0]:
+            result=si.RectBivariateSpline(self.y, self.x, z0).call(y, x)
+            if np.any(NaN_mask.ravel()):
+                result[si.RectBivariateSpline(self.y, self.x, NaN_mask.astype(float)).call(y, x)>0]=np.NaN
+        else:
+            result=si.RectBivariateSpline(self.y[::-1], self.x, z0[::-1,:]).ev(y, x)
+            if np.any(NaN_mask.ravel()):
+                result[si.RectBivariateSpline(self.y[::-1], self.x, NaN_mask[::-1,:].astype(float)).call(y, x)>0]=np.NaN
+        return result
