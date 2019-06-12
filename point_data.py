@@ -130,7 +130,7 @@ class point_data(object):
         # method to get projected coordinates for the data.  Adds 'x' and 'y' fields to the data, optionally returns 'self'
         out_srs=osr.SpatialReference()
         if proj4_string is None and EPSG is not None:
-            out_srs.ImportFromProj4(EPSG)
+            out_srs.ImportFromEPSG(EPSG)
         else:
             errCode=out_srs.ImportFromProj4(proj4_string)
             if errCode > 0:
@@ -161,15 +161,33 @@ class point_data(object):
             self.list_of_fields=list_of_fields
         else:
             self.list_of_fields=[key for key in dd.keys()]
+        #work out a default size for arrays:
+        default_shape=dd[next(iter(dd))].shape
         for field in self.list_of_fields:
+            if field in dd:
                 setattr(self, field, dd[field])
+            else:
+                setattr(self, field, np.zeros(default_shape)+np.NaN)
         self.__update_size_and_shape__()
         return self
 
     def from_list(self, D_list):
+        if len(self.list_of_fields)==0:
+            for D in D_list:
+                if hasattr(D,'list_of_fields') and len(D.list_of_fields)>0:
+                    self.list_of_fields=D.list_of_fields.copy()
+                    break
         try:
             for field in self.list_of_fields:
-                data_list=[getattr(this_D, field).ravel() for this_D in D_list if this_D is not None]
+                data_list=[];
+                for this_D in D_list:
+                    if this_D is None:
+                        continue
+                    try:
+                        data_list.append(getattr(this_D, field).ravel())
+                    except AttributeError:
+                        print("Problem with field %s" % field)
+                #data_list=[getattr(this_D, field).ravel() for this_D in D_list if this_D is not None]
                 setattr(self, field, np.concatenate(data_list, 0))
         except TypeError:
             for field in self.list_of_fields:
@@ -198,7 +216,7 @@ class point_data(object):
         if self.columns is not None and self.columns >=1 and by_row is not None:
             by_row=True
         if datasets is None:
-            datasets=self.list_of_fields
+            datasets=self.list_of_fields.copy()
         if (len(index) == 0) or ( (index.dtype == 'bool') and np.all(index==0)):
             dd={key:np.zeros([1,0]) for key in datasets}
         else:              
