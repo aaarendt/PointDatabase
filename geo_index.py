@@ -356,6 +356,9 @@ class geo_index(dict):
         if isinstance(xyb[0], float) or isinstance(xyb[0], int):
             # if scalars were provided, keep the 'zip' from choking by making them iterable
             xyb=[np.array(xyb[0].copy()).reshape([1]), np.array(xyb[1].copy()).reshape([1])]
+        # round the input bins to the bin resolution
+        for ii in [0, 1]:
+            xyb[ii]=np.round(xyb[ii]/self.attrs['delta'][ii])*self.attrs['delta'][ii]
         # make a temporary geo_index to hold the subset of the current geoindex
         # corresponding to xb and yb
         temp_gi=geo_index(delta=self.attrs['delta'], SRS_proj4=self.attrs['SRS_proj4'])
