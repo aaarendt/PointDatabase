@@ -32,13 +32,13 @@ class geo_index(dict):
                 self.from_latlon(self.data.latitude, self.data.longitude)
         self.h5_file=None
 
-    def __del__(self):
-        if self.h5_file is not None:
-            try:
-                self.h5_file.close()
-            except SystemError as err:
-                print("CAUGHT SYSTEM ERROR: %s" % str(err))
-        return
+#    def __del__(self):
+#        if self.h5_file is not None:
+#            try:
+#                self.h5_file.close()
+#            except SystemError as err:
+#                print("CAUGHT SYSTEM ERROR: %s" % str(err))
+#        return
 
     def __copy__(self):
         # copy method,
