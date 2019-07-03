@@ -138,26 +138,23 @@ class ATL06_data:
                     elif group == "derived" and field == "BP":
                         data=np.zeros((index_range[1]-index_range[0], 2))+self.beam_pair
                         bad_val=0
-<<<<<<< HEAD
-                    elif group is "derived" and field is "LR":
+                    elif group == "derived" and field == "LR":
                         data=np.ones((index_range[1]-index_range[0], 2))
                         data[:,0]=0
                         bad_val=-9999
-                    elif group is "derived" and field is "n_pixels":
+                    elif group == "derived" and field == "n_pixels":
                         if self.beam_type[0]=='weak':
                             data=np.tile([4, 16], [n_vals, 1])
                         else:
                             data=np.tile([16, 4], [n_vals, 1])
                         bad_val=-9999
-                    elif group is "derived":
-                        continue
-                    else:
-=======
+                    elif group == "derived" and field == "spot":
+                        data=np.ones((index_range[1]-index_range[0], 2))
+                        for bb in [0, 1]:
+                            data[:,bb]=np.float64(h5_f[beam_names[bb]].attrs['atlas_spot_number'])
                     elif group == "derived":
                         continue
                     else:
-
->>>>>>> minor changes
                         # All other groups are under the land_ice_segments/group hirearchy
                          try:
                             bad_val=h5_f[beam_names[0]]['land_ice_segments'][group][field].attrs['_FillValue']
@@ -199,7 +196,8 @@ class ATL06_data:
         h5_f.close()
         return self
 
-    def get_xy(self, proj4_string, EPSG=None):
+    
+    def get_xy(self, proj4_string=None, EPSG=None):
         # method to get projected coordinates for the data.  Adds 'x' and 'y' fields to the data, optionally returns 'self'
         out_srs=osr.SpatialReference()
         if proj4_string is None and EPSG is not None:
@@ -249,13 +247,8 @@ class ATL06_data:
             setattr(self, field, getattr(self, field).ravel())
         self.__update_size_and_shape__()
         return self
-<<<<<<< HEAD
 
     def from_list(self, D6_list, copy_fields=True):
-=======
-
-    def from_list(self, D6_list):
->>>>>>> minor changes
         """
         Append the fields of several ATL06_data instances.
         """
