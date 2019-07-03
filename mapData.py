@@ -21,6 +21,8 @@ class mapData(object):
         self.projection=None
         self.filename=None
         self.extent=None
+        self.interpolator=None
+        self.nan_interpolator=None
         
     def __copy__(self):
         temp=mapData()
@@ -90,11 +92,14 @@ class mapData(object):
     
     def from_h5(self, h5_file, field_mapping={}, group='/', bounds=None, skip=1):
        self.filename=h5_file
-       fields={'x':'x','y':'y','z':'z'}
+       fields={'x':'x','y':'y','z':'z','t':'t'}
        fields.update(field_mapping)
+       t=None
        with h5py.File(h5_file) as h5f:
            x=np.array(h5f[group+fields['x']])
            y=np.array(h5f[group+fields['y']])
+           if fields['t'] in h5f[group]:
+               t=np.array(h5f[group+fields['t']])
            if bounds is not None:
                cols = np.where(( x>=bounds[0][0] ) & ( x<= bounds[0][1] ))[0]
                rows = np.where(( y>=bounds[1][0] ) & ( y<= bounds[1][1] ))[0]
@@ -109,6 +114,8 @@ class mapData(object):
                    self.z=np.array(zfield[rows[0]:rows[-1]+1, cols[0]:cols[-1]+1,:])
                self.x=x[cols]
                self.y=y[rows]
+               if t is not None:
+                   self.t=t
        self.extent=[np.min(self.x), np.max(self.x), np.min(self.y), np.max(self.y)]
        return self
     
@@ -159,33 +166,50 @@ class mapData(object):
         self.extent=[np.min(self.x), np.max(self.x), np.min(self.y), np.max(self.y)]
         return self
     def subset(self, XR, YR):
-        col_ind=np.where((self.x >= XR[0]) & (self.x <= XR[1]))[0]
-        row_ind=np.where((self.y >= YR[0]) & (self.y <= YR[1]))[0]
+        col_ind = np.where((self.x >= XR[0]) & (self.x <= XR[1]))[0]
+        row_ind = np.where((self.y >= YR[0]) & (self.y <= YR[1]))[0]
         try:
-            self.index(row_ind, col_ind)
-            return self
-        except:
-            print("HEY!")
+           self.index(row_ind, col_ind)
+           return self
+        except Exception as e:
+           print("mapData: self extent is: ", self.extent)
+           print("XR is %s", XR)
+           print("YR is %s", YR)
+           print("Error is" )
+           print(e)
+           
     def show(self, ax=None):
         if ax is None:
-            h_im=plt.imshow(self.z, extent=self.extent)
+            h_im = plt.imshow(self.z, extent=self.extent)
         else:
-            h_im=ax.imshow(self.z, extent=self.extent)
+            h_im = ax.imshow(self.z, extent=self.extent)
         return h_im
         
     def interp(self, x, y, gridded=False, band=0):
-        if len(self.z.shape) > 2:
-            z0=self.z[:,:,band]
-        else:
-            z0=self.z.copy()
-        NaN_mask=np.isfinite(z0)==0
-        z0[NaN_mask]=0
-        if self.y[1]> self.y[0]:
-            result=si.RectBivariateSpline(self.y, self.x, z0).call(y, x)
-            if np.any(NaN_mask.ravel()):
-                result[si.RectBivariateSpline(self.y, self.x, NaN_mask.astype(float)).call(y, x)>0]=np.NaN
-        else:
-            result=si.RectBivariateSpline(self.y[::-1], self.x, z0[::-1,:]).ev(y, x)
-            if np.any(NaN_mask.ravel()):
-                result[si.RectBivariateSpline(self.y[::-1], self.x, NaN_mask[::-1,:].astype(float)).call(y, x)>0]=np.NaN
+        if self.interpolator is None:
+            if len(self.z.shape) > 2:
+                z0 = self.z[:,:,band]
+            else:
+                z0 = self.z.copy()
+            NaN_mask =  np.isfinite(z0)==0
+            z0[NaN_mask] = 0
+            
+            if self.y[1]> self.y[0]:
+                self.interpolator = si.RectBivariateSpline(self.y, self.x, z0)
+                if np.any(NaN_mask.ravel()):
+                    self.maskinterpolator = si.RectBivariateSpline(self.y, self.x, NaN_mask.astype(float), kx=1, ky=1)
+            else:
+                self.interpolator = si.RectBivariateSpline(self.y[::-1], self.x, z0[::-1,:], kx=1, ky=1)
+                if np.any(NaN_mask.ravel()):
+                    self.nan_interpolator = si.RectBivariateSpline(self.y[::-1], self.x, NaN_mask[::-1,:].astype(float), kx=1, ky=1)
+        result = np.zeros_like(x)+np.NaN
+        good = (x >= np.min(self.x)) & (x <= np.max(self.x)) & \
+               (y >= np.min(self.y)) & (y <= np.max(self.y))
+        
+        result[good]=self.interpolator.ev(y[good], x[good])
+        if self.nan_interpolator is not None:
+            to_NaN = good
+            # nan_interpolator returns nonzero for NaN points in self.z
+            to_NaN[good] = self.nan_interpolator.ev(y[good], x[good]) != 0
+            result[to_NaN] = np.NaN
         return result
