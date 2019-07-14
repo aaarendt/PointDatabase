@@ -6,9 +6,10 @@ Created on Mon Jul 30 21:40:42 2018
 """
 import numpy as np
 import matplotlib.pyplot as plt
-def in_axes(x, y):
-    gca=plt.gca()
-    xl=gca.get_xlim()
-    yl=gca.get_ylim()
+def in_axes(x, y, ax=plt.gca()):
+    xl=ax.get_xlim()
+    yl=ax.get_ylim()
+    print(xl)
+    print(yl)
     return np.where(np.logical_and(np.logical_and(x>=xl[0], x<=xl[1]), np.logical_and(y>=yl[0], y<=yl[1])))
     
