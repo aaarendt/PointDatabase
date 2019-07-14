@@ -151,6 +151,8 @@ class geo_index(dict):
             alreadyIn=list()
             for fileNum in range(index.attrs['n_files']):
                 thisFileName=index.attrs['file_%d' % fileNum]
+                if 'dir_root' in index.attrs:
+                    thisFileName=index.attrs['dir_root']+'/'+thisFileName
                 thisFileName=thisFileName.replace(dir_root,'')
                 thisFileType=index.attrs['type_%d' % fileNum]
                 if thisFileName not in fileListTo:
