@@ -32,14 +32,6 @@ class geo_index(dict):
                 self.from_latlon(self.data.latitude, self.data.longitude)
         self.h5_file=None
 
-#    def __del__(self):
-#        if self.h5_file is not None:
-#            try:
-#                self.h5_file.close()
-#            except SystemError as err:
-#                print("CAUGHT SYSTEM ERROR: %s" % str(err))
-#        return
-
     def __copy__(self):
         # copy method,
         out=geo_index()
@@ -429,12 +421,17 @@ class geo_index(dict):
         return query_results
 
     def bins_as_array(self):
+        """
+            return an array containing the locations for all the bins in an index
+        """
         if len(self)>0:
             xy_bin=np.c_[[np.fromstring(key, sep='_') for key in self.keys()]]
         else:
             try:
                 xy_bin=np.c_[[np.fromstring(key, sep='_') for key in self.h5_file_index.keys()]]
-            except AttributeError:
+            except AttributeError as e:
+                print("AttributeError in bins_as_array, continuing:")
+                print(e)
                 xy_bin=np.zeros(0)
         if xy_bin.size > 0:
             return (xy_bin[:,0].ravel(), xy_bin[:,1].ravel())
@@ -481,7 +478,7 @@ def get_data_for_geo_index(query_results, delta=[10000., 10000.], fields=None, d
     for file_key, result in query_results.items():
         if dir_root is not None:
             try:
-                this_file = dir_root+file_key
+                this_file = dir_root + file_key
             except TypeError:
                 this_file = dir_root + file_key.decode()
         else:
@@ -611,8 +608,9 @@ def read_indexed_h5_file(filename, xy_bin,  fields=['x','y','time'], index_range
                         out_data[field]=np.zeros(0)
                     elif len(temp)==1:
                         out_data[field]=temp[0]
-                except ValueError:
-                    print("ValueError!")
+                except ValueError as e:
+                    print("ValueError in read_indexed_h5_file, continuing")
+                    print(e)
             else:
                 out_data[field]=np.array(out_data[field])
     return point_data( list_of_fields=fields).from_dict(out_data )

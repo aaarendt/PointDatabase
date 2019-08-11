@@ -205,9 +205,12 @@ class point_data(object):
         if self.size<2:
             return self
         ind=pt_blockmedian(self.x, self.y, np.float64(self.z), scale, return_index=True)[3]
-        for field in self.list_of_fields:
-            temp_field=getattr(self, field)
-            setattr(self, field,  0.5*temp_field[ind[:,0]] + 0.5*temp_field[ind[:,1]])
+        try:
+            for field in self.list_of_fields:
+                temp_field=getattr(self, field)
+                setattr(self, field,  0.5*temp_field[ind[:,0]] + 0.5*temp_field[ind[:,1]])
+        except IndexError:
+            pass
         self.__update_size_and_shape__()
         return self
         
