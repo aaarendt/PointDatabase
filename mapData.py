@@ -95,7 +95,7 @@ class mapData(object):
        fields={'x':'x','y':'y','z':'z','t':'t'}
        fields.update(field_mapping)
        t=None
-       with h5py.File(h5_file) as h5f:
+       with h5py.File(h5_file,'r') as h5f:
            x=np.array(h5f[group+fields['x']])
            y=np.array(h5f[group+fields['y']])
            if fields['t'] in h5f[group]:
