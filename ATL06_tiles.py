@@ -17,6 +17,7 @@ from LSsurf.unique_by_rows import unique_by_rows
 import sys
 from PointDatabase.check_ATL06_blacklist import check_rgt_cycle_blacklist
 from glob import glob
+from PointDatabase.geo_index import geo_index, index_list_for_files
 
 import os
 import re 
@@ -177,15 +178,34 @@ def index_tiles(tile_dir_root, hemisphere):
      #    iList = index_list_for_files(files, "indexed_h5", [1.e4, 1.e4], SRS_proj4, dir_root=tile_dir)        
      #    geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir).to_file(tile_dir+'/GeoIndex.h5')
      #    iList_top[-1].to_file(tile_dir+'/GeoIndex.h5')
-     files=glob(tile_dir_root+'/cycle*/E*.h5')
+     files=glob(tile_dir_root+'/E*.h5')
+     print("found files:")
+     print(files)
      iList = index_list_for_files(files, "indexed_h5", [1.e4, 1.e4], SRS_proj4, dir_root=tile_dir_root)
      geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir_root).to_file(tile_dir_root+'/GeoIndex.h5')
-     
 
+def index_cycle_indices(tile_dir_root, hemisphere):
+
+    if hemisphere==1:
+        SRS_proj4='+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'
+    else:
+        SRS_proj4='+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'
+
+    files=glob(tile_dir_root+'/cycle*/GeoIndex.h5')
+    iList=index_list_for_files(files, "h5_geoindex", [1.e4, 1.e4], SRS_proj4)#, dir_root=tile_dir_root)
+    for index in iList:
+        index.change_root(tile_dir_root)
+    geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir_root).to_file(tile_dir_root+'/GeoIndex.h5')
+
+    
 def main():
     #make_queue('/home/ben/temp/GL_tile_queue.txt', hemisphere=1)
-    index_tiles('/Volumes/ice2/ben/scf/GL_06/tiles/001/', 1)
-    #index_tiles('/Volumes/ice2/ben/scf/AA_06/tiles/001/', -1)
+    #index_tiles('/Volumes/ice2/ben/scf/GL_06/tiles/001/', 1)
+    if len(sys.argv)==3:
+        #for dirname in glob(sys.argv[1]+'/cycle*'):
+        #    index_tiles(dirname, sys.argv[2])
+        index_cycle_indices(sys.argv[1], sys.argv[2])
+        sys.exit(0)
     xy=(np.int(sys.argv[1]), np.int(sys.argv[2]))
     hemisphere=np.int(sys.argv[3])
     cycle=sys.argv[4]
