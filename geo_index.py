@@ -66,21 +66,6 @@ class geo_index(dict):
         out.data=self.data
         return out
 
-    def reduce_delta(self, delta, data=None):
-        # make a geo_index with a smaller delta value than the current
-        if data is None:
-            data=self.data
-        out=geo_index(delta=delta)
-        out.attrs=self.attrs.copy()
-        out.attrs['delta']=delta
-        for key in self.keys():
-            i0=self[key]['offset_start']
-            temp=geo_index().from_xy([data.x[i0:self[key]['offset_end']], data.y[i0:self[key]['offset_end']]])
-            for key1 in temp:
-                out[key]={'file_num':0, 'offset_start':i0+temp[key1]['offset_start'],
-                   'offset_end':i0+temp[key1]['offset_end']}
-        return out
-
     def from_xy(self, xy,  filename=None, file_type=None, number=0, fake_offset_val=None, first_last=None):
         # build a geo_index from a list of x, y points, for a specified filename
         # and file_type.  If the file_type is 'geo_index', optionally sepecify a
@@ -105,10 +90,11 @@ class geo_index(dict):
                 self[key] = {'file_num':np.array(int(number), ndmin=1), 'offset_start':np.array(first[ind], ndmin=1), 'offset_end':np.array(last[ind], ndmin=1)}
             else:
                 self[key] = {'file_num':np.array(int(number), ndmin=1), 'offset_start':np.array(fake_offset_val, ndmin=1), 'offset_end':np.array(fake_offset_val, ndmin=1)}
-
-        self.attrs['file_0']=filename
-        self.attrs['type_0']=file_type
-        self.attrs['n_files']=1
+        #In some cases the files are predefined.  If this is not the case, use the current filename 
+        if 'file_0' not in self.attrs:
+            self.attrs['file_0']=filename
+            self.attrs['type_0']=file_type
+            self.attrs['n_files']=1
         return self
 
     def from_latlon(self, lat, lon,  filename=None, file_type=None, number=0, fake_offset_val=None):
@@ -197,6 +183,18 @@ class geo_index(dict):
         self.h5_file_index=h5_f['index']
         #if read_file is True:
         #    h5_f.close()
+        return self
+
+    def change_root(self, new_root):
+        old_root = self.attrs['dir_root'].replace('//','/')
+        new_root = new_root.replace('//','/')
+        file_re = re.compile('file_\d+')
+        for key in self.attrs.keys():
+            if file_re.match(key) is not None:
+                temp = old_root+self.attrs[key]
+                temp=temp.replace(new_root,'')
+                self.attrs[key]=temp
+        self.attrs['dir_root']=new_root
         return self
 
     def to_file(self, filename):
@@ -515,6 +513,7 @@ def get_data_for_geo_index(query_results, delta=[10000., 10000.], fields=None, d
             D['time'] = np.zeros_like(D['x'])+WV_MatlabDate(this_file)
             D=point_data().from_dict(D)
             D.index(np.isfinite(D.z) & np.isfinite(D.sigma))
+            D.filename=this_file
         if result['type'] == 'indexed_h5':
             D = [read_indexed_h5_file(this_file, [result['x'], result['y']],  fields=fields, index_range=[result['offset_start'], result['offset_end']])]
         if result['type'] == 'indexed_h5_from_matlab':
