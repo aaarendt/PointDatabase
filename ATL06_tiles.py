@@ -242,8 +242,8 @@ def main():
         GI_file='/Volumes/ice2/ben/scf/AA_06/001/cycle_%s/index/GeoIndex.h5' % cycle
     field_dict={None:['delta_time','h_li','h_li_sigma','latitude','longitude','atl06_quality_summary','segment_id','sigma_geo_h'], 
             'fit_statistics':['dh_fit_dx'],
-            'ground_track':['x_atc'],
-            'geophysical' : ['dac'],
+            'ground_track':['x_atc', 'sigma_geo_xt','sigma_geo_at', 'sigma_geo_h'],
+            'geophysical' : ['dac','ocean_tide'],
             'orbit_info':['rgt','cycle_number'],
             'derived':['valid','matlab_time', 'n_pixels','LR','BP','spot']}
     
