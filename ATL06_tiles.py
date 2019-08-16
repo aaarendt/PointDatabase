@@ -139,8 +139,21 @@ def read_tile(xy0, tile_dir,  W=None):
     return D_list
 
 def make_queue(queue_file, hemisphere=-1):
-    tile_spacing=1.e5    
+
+    """
+    make a queue of commands to generate the tiles for ATL06
+    arguments:
+        queue_file: file into which to write the commands
+        hemisphere: northern or southern hemisphere, defaults to -1 (southern)
+    Edits to adapt to a different machine:
+        
+        1. Change the locations of the masks
+        2. Change the location of the executable (last line in the function)
+    """
     
+    
+    tile_spacing=1.e5    
+    # EDIT HERE TO SET THE MASK LOCATIONS
     if hemisphere==-1:
         mask_G=mapData().from_geotif('/Volumes/ice1/ben/MOA/moa_2009_1km.tif')
         mask_G.z=mask_G.z>100
@@ -159,7 +172,7 @@ def make_queue(queue_file, hemisphere=-1):
     y0=y0.ravel()[maski]
     xyTile=set([xy0 for xy0 in zip(x0, y0)])
     dilate_bins(xyTile, tile_spacing)
-    
+    #EDIT BELOW TO SET THE EXECUTABLE LOCATION
     with open(queue_file,'w') as qf:
         for cycle in ['01','02','03']:
             for xy in xyTile:
@@ -167,17 +180,18 @@ def make_queue(queue_file, hemisphere=-1):
   
 
 def index_tiles(tile_dir_root, hemisphere):
-     from PointDatabase.geo_index import geo_index, index_list_for_files
+     """
+     Generate a geo_index for the tile files
+     
+     Arguments:
+         tile_dir_root: directory under which to search for the tile files
+         hemisphere: north(1) or south(-1), used to set the projection
+     """
      if hemisphere==1:
          SRS_proj4='+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'
      else:
          SRS_proj4='+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs '
-     #iList_top=[]
-     #for tile_dir in glob(tile_dir_root+'/cycle*'):
-     #    files=glob(tile_dir+'/E*.h5')  
-     #    iList = index_list_for_files(files, "indexed_h5", [1.e4, 1.e4], SRS_proj4, dir_root=tile_dir)        
-     #    geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir).to_file(tile_dir+'/GeoIndex.h5')
-     #    iList_top[-1].to_file(tile_dir+'/GeoIndex.h5')
+
      files=glob(tile_dir_root+'/E*.h5')
      print("found files:")
      print(files)
