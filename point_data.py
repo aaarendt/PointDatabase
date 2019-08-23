@@ -197,14 +197,18 @@ class point_data(object):
 
     def index(self, index):
         for field in self.list_of_fields:
-            setattr(self, field, getattr(self, field)[index])
+            try:
+                setattr(self, field, getattr(self, field)[index])
+            except IndexError:
+                #print("IndexError for field %s, setting to NaN" % field)
+                setattr(self, field, np.zeros(self.shape)[index]+np.NaN)                    
         self.__update_size_and_shape__()
         return self
         
-    def blockmedian(self, scale):
+    def blockmedian(self, scale, field='z'):
         if self.size<2:
             return self
-        ind=pt_blockmedian(self.x, self.y, np.float64(self.z), scale, return_index=True)[3]
+        ind=pt_blockmedian(self.x, self.y, np.float64(getattr(self, field)), scale, return_index=True)[3]
         try:
             for field in self.list_of_fields:
                 temp_field=getattr(self, field)
