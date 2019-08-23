@@ -127,16 +127,27 @@ def read_tile(xy0, tile_dir,  W=None):
             D[field]=np.concatenate(D[field])
         # make D into a point_data instance:
         D=point_data(list_of_fields=[key for key in D.keys()]).from_dict(D)
-        # sort D into ATL06 pieces:
-        _, bins=unique_by_rows(np.c_[D.cycle_number, D.rgt, D.BP, D.LR], return_dict=True)
-        D_list=[]
-        for key in bins:
-            ind=np.argsort(D.delta_time[bins[key]])
-            this_D=D.subset(bins[key][ind])
-            if W is not None:
+    return reconstruct_tracks(D, x0=x0, y0=y0, W=W)
+
+def reconstruct_tracks(D, x0=None, y0=None, W=None):
+    '''
+    sort a collection of data (D) into a list of data organized by track
+    '''
+    if ('cycle' in D.list_of_fields):
+        _, bin_dict=unique_by_rows(np.c_[D.cycle, D.rgt, D.BP, D.LR], return_dict=True)
+    else:
+        _, bin_dict=unique_by_rows(np.c_[D.cycle_number, D.rgt, D.BP, D.LR], return_dict=True)
+    D0=[]
+    for key in bin_dict:
+        if "delta_time" in D.list_of_fields:
+            ind=np.argsort(D.delta_time[bin_dict[key]])
+        else:
+            ind=np.argsort(D.time[bin_dict[key]])
+        this_D=D.subset(bin_dict[key][ind])
+        if W is not None:
                 this_D.index((np.abs(this_D.x-x0)<W/2) &(np.abs(this_D.y-y0)<W/2) )
-            D_list.append(this_D)             
-    return D_list
+        D0.append(this_D)   
+    return D0
 
 def make_queue(queue_file, hemisphere=-1):
 
