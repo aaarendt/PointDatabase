@@ -6,7 +6,7 @@ Created on Sat Dec 22 15:35:13 2018
 @author: ben
 """
 
-from osgeo import gdal, gdalconst
+from osgeo import gdal, gdalconst, osr
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as pColors
@@ -33,6 +33,9 @@ class mapData(object):
     def copy(self):
         return self.__copy__()
     
+    def update_extent(self):
+        self.extent=[np.min(self.x), np.max(self.x), np.min(self.y), np.max(self.y)]
+    
     def from_geotif(self, file, bands=None, bounds=None, skip=1):
         """
             Read a raster from a DEM file
@@ -51,7 +54,7 @@ class mapData(object):
         # ii and jj are the pixel center coordinates.  0,0 in GDAL is the upper-left
         # corner of the first pixel.
         ii=np.arange(0, band.XSize)+0.5
-        jj=np.arange(0, band.YSize)-0.5
+        jj=np.arange(0, band.YSize)+0.5
         x=GT[0]+GT[1]*ii
         y=GT[3]+GT[5]*jj
         if bounds is not None:
@@ -63,7 +66,7 @@ class mapData(object):
         z=list()
         for band_num in bands:
             band=ds.GetRasterBand(int(band_num))
-            z.append(band.ReadAsArray(int(cols[0]), int(rows[0]), int(cols[-1]-cols[0]+1), int(rows[-1]-rows[0]+1)))
+            z.append(band.ReadAsArray(int(cols[0]), int(rows[0]), int(cols[-1]-cols[0]+1), int(rows[-1]-rows[0]+1))[::-1,:])
             if skip > 1:
                 z[-1]=z[-1][::skip, ::skip]
         if len(bands)==1:
@@ -84,10 +87,10 @@ class mapData(object):
         x=x[cols]
         y=y[rows]
         self.x=x
-        self.y=y
+        self.y=y[::-1]
         self.z=z
         self.projection=proj
-        self.extent=[np.min(self.x), np.max(self.x), np.min(self.y), np.max(self.y)]
+        self.update_extent()
         return self
     
     def from_h5(self, h5_file, field_mapping={}, group='/', bounds=None, skip=1):
@@ -116,9 +119,44 @@ class mapData(object):
                self.y=y[rows]
                if t is not None:
                    self.t=t
-       self.extent=[np.min(self.x), np.max(self.x), np.min(self.y), np.max(self.y)]
+       self.update_extent()
        return self
     
+    def to_geotif(self, out_file, srs_proj4=None, srs_wkt=None,  srs_epsg=None):
+        """
+        Write a mapData object to a geotif.
+        """
+        nx=self.z.shape[1]
+        ny=self.z.shape[0]
+        if len(self.z.shape)>2:
+            n_bands=self.z.shape[2]
+        else:
+            n_bands=1;
+        dx=np.abs(np.diff(self.x[0:2]))[0]
+        dy=np.abs(np.diff(self.y[0:2]))[0]
+        
+        out_ds=gdal.GetDriverByName('GTiff').Create(out_file, nx, ny, n_bands, gdal.GDT_Float32, options=["compress=LZW"])
+        out_ds.SetGeoTransform((self.x.min()-dx/2, dx, 0, self.y.max()+dy/2, 0., -dy))
+        sr=osr.SpatialReference()
+        if srs_proj4 is not None:
+            sr.ImportFromEPSG(srs_epsg)
+        elif srs_wkt is not None: 
+            sr.ImportFromWKT(srs_wkt)
+        elif srs_epsg is not None:
+            sr.ImportFromEPSG(srs_epsg)
+            
+        else:
+            raise ValueError("must specify at least one of srs_proj4, srs_wkt, srs_epsg")
+        
+        out_ds.SetProjection(sr.ExportToWkt())
+        if n_bands == 1:
+            out_ds.GetRasterBand(1).WriteArray(self.z[::-1,:])
+        else:
+            for band in range(n_bands):
+                out_ds.GetRasterBand(band+1).WriteArray(self.z[::-1,:,band])
+        out_ds.FlushCache()
+        out_ds = None
+
     def add_alpha_band(self, alpha=None, nodata_vals=None):
         if alpha is None:
             if nodata_vals is not None:
@@ -163,8 +201,9 @@ class mapData(object):
             self.z=self.z[row_ind,:][:, col_ind]
         else:
             self.z=self.z[row_ind,:, :][:, col_ind,:]
-        self.extent=[np.min(self.x), np.max(self.x), np.min(self.y), np.max(self.y)]
+        self.update_extent()
         return self
+    
     def subset(self, XR, YR):
         col_ind = np.where((self.x >= XR[0]) & (self.x <= XR[1]))[0]
         row_ind = np.where((self.y >= YR[0]) & (self.y <= YR[1]))[0]
@@ -180,9 +219,9 @@ class mapData(object):
            
     def show(self, ax=None):
         if ax is None:
-            h_im = plt.imshow(self.z, extent=self.extent)
+            h_im = plt.imshow(self.z, extent=self.extent, origin='lower')
         else:
-            h_im = ax.imshow(self.z, extent=self.extent)
+            h_im = ax.imshow(self.z, extent=self.extent, origin='lower')
         return h_im
         
     def interp(self, x, y, gridded=False, band=0):
@@ -202,14 +241,32 @@ class mapData(object):
                 self.interpolator = si.RectBivariateSpline(self.y[::-1], self.x, z0[::-1,:], kx=1, ky=1)
                 if np.any(NaN_mask.ravel()):
                     self.nan_interpolator = si.RectBivariateSpline(self.y[::-1], self.x, NaN_mask[::-1,:].astype(float), kx=1, ky=1)
-        result = np.zeros_like(x)+np.NaN
-        good = (x >= np.min(self.x)) & (x <= np.max(self.x)) & \
-               (y >= np.min(self.y)) & (y <= np.max(self.y))
         
-        result[good]=self.interpolator.ev(y[good], x[good])
+        if gridded:
+            result=np.zeros((len(y), len(x)))
+            good_x = np.flatnonzero((x >= np.min(self.x)) & (x <= np.max(self.x)))
+            good_y = np.flatnonzero((y >= np.min(self.y)) & (y <= np.max(self.y)))
+            if (len(good_y)>0) and (len(good_x)>0):
+                good_x = slice(good_x[0], good_x[-1])
+                good_y = slice(good_y[0], good_y[-1])
+
+                result[good_y, good_x] = self.interpolator(y[good_y], x[good_x])
+                if self.nan_interpolator is not None:
+                    to_NaN=np.ones_like(result, dtype=bool)
+                    to_NaN[good_y, good_x] = self.nan_interpoator(y[good_y], x[good_x])
+                    result[to_NaN] = np.NaN
+        else:
+            result = np.zeros_like(x)+np.NaN
+            good = (x >= np.min(self.x)) & (x <= np.max(self.x)) & \
+                   (y >= np.min(self.y)) & (y <= np.max(self.y))
+        
+            result[good]=self.interpolator.ev(y[good], x[good])
         if self.nan_interpolator is not None:
             to_NaN = good
             # nan_interpolator returns nonzero for NaN points in self.z
             to_NaN[good] = self.nan_interpolator.ev(y[good], x[good]) != 0
             result[to_NaN] = np.NaN
         return result
+
+    def bounds(self, pad=0):
+        return [[np.min(self.x)-pad, np.max(self.x)+pad], [np.min(self.y)-pad, np.max(self.y)+pad]]
