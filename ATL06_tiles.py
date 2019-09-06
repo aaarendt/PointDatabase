@@ -162,7 +162,6 @@ def make_queue(queue_file, hemisphere=-1):
         2. Change the location of the executable (last line in the function)
     """
     
-    
     tile_spacing=1.e5    
     # EDIT HERE TO SET THE MASK LOCATIONS
     if hemisphere==-1:
@@ -217,10 +216,19 @@ def index_cycle_indices(tile_dir_root, hemisphere):
         SRS_proj4='+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'
 
     files=glob(tile_dir_root+'/cycle*/GeoIndex.h5')
-    iList=index_list_for_files(files, "h5_geoindex", [1.e4, 1.e4], SRS_proj4)#, dir_root=tile_dir_root)
-    for index in iList:
-        index.change_root(tile_dir_root)
-    geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir_root).to_file(tile_dir_root+'/GeoIndex.h5')
+    index_list=list()
+    for sub_index_file in files:
+        temp=geo_index().from_file(sub_index_file)
+        xy=temp.bins_as_array()
+        index_list.append(geo_index(delta=[1.e4, 1.e4]).from_xy(xy, filename=sub_index_file, file_type='h5_geoindex', fake_offset_val=-1))
+        temp=None
+    geo_index(delta=[1.e4, 1.e4], SRS_proj4=SRS_proj4).from_list(index_list).to_file(tile_dir_root+'/GeoIndex_v2.h5')
+     
+    
+    #iList=index_list_for_files(files, "h5_geoindex", [1.e4, 1.e4], SRS_proj4)#, dir_root=tile_dir_root)
+    #for index in iList:
+    #    index.change_root(tile_dir_root)
+    #geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir_root).to_file(tile_dir_root+'/GeoIndex.h5')
 
     
 def main():
@@ -239,7 +247,8 @@ def main():
     tile_spacing=1.e5
     
     blockmedian_scale=None
-    seg_diff_scale=5.
+    #Skip seg_diff_Scale (August 27: changed from 5 to None)
+    seg_diff_scale=None
     out_dir='/Volumes/insar10/ben/temp/cycle_%s' % cycle
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
@@ -253,10 +262,10 @@ def main():
         GI_file='/Volumes/ice2/ben/scf/AA_06/001/cycle_%s/index/GeoIndex.h5' % cycle
     field_dict={None:['delta_time','h_li','h_li_sigma','latitude','longitude','atl06_quality_summary','segment_id','sigma_geo_h'], 
             'fit_statistics':['dh_fit_dx'],
-            'ground_track':['x_atc', 'sigma_geo_xt','sigma_geo_at', 'sigma_geo_h'],
-            'geophysical' : ['dac','ocean_tide'],
+            'ground_track':['x_atc', 'sigma_geo_xt','sigma_geo_at'],
+            'geophysical' : ['dac','tide_ocean'],
             'orbit_info':['rgt','cycle_number'],
-            'derived':['valid','matlab_time', 'n_pixels','LR','BP','spot']}
+            'derived':['valid','matlab_time', 'n_pixels','LR','BP','spot','rss_along_track_dh']}
     
     arg_dict={'SRS_proj4':SRS_proj4,'tile_spacing':tile_spacing, 'pad':pad, 'bin_W':bin_W, 'GI_file':GI_file,'out_dir':out_dir,'field_dict':field_dict,'cycle':cycle}
     arg_dict.update({'seg_diff_scale':seg_diff_scale, 'blockmedian_scale':blockmedian_scale})
