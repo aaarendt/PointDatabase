@@ -184,6 +184,10 @@ class ATL06_data:
         if "derived" in self.field_dict and "matlab_time" in self.field_dict['derived']:
             self.get_Matlab_time()
         self.__update_size_and_shape__()
+        
+        if "derived" in self.field_dict and "rss_along_track_dh" in self.field_dict['derived']:
+            self.get_rss_along_track_dh()
+        
         # assign fields that must be copied from single-value attributes in the
         # h5 file
         if 'cycle_number' in self.list_of_fields:
@@ -339,6 +343,19 @@ class ATL06_data:
 
     def get_Matlab_time(self):
         self.assign({'matlab_time': 737061. + self.delta_time/24./3600.})
-
+        
+    def get_rss_along_track_dh(self):
+        self.rss_along_track_dh=np.zeros(self.shape)
+        n_pts=self.shape[0]
+        if n_pts > 1:
+            i0=slice(1, n_pts-1)
+            for ii in [-1, 1]:
+                i1=slice(1+ii, n_pts-1+ii)
+                dx=self.x_atc[i0,:]-self.x_atc[i1,:]
+                self.rss_along_track_dh[i0,:] += (self.h_li[i0,:]-self.dh_fit_dx[i0,:]*dx-self.h_li[i1,:])**2
+            self.rss_along_track_dh[0,:]=(self.h_li[1,:]-self.h_li[0,:] - (self.x_atc[1,:]-self.x_atc[0,:])*self.dh_fit_dx[0,:])**2
+            self.rss_along_track_dh[-1,:]=(self.h_li[-1,:]-self.h_li[-2,:] - (self.x_atc[-1,:]-self.x_atc[-2,:])*self.dh_fit_dx[-1,:])**2
+            self.rss_along_track_dh = np.sqrt(self.rss_along_track_dh)
+        
 def delta_t_to_Matlab(delta_t):
     return 730486 + delta_t/24./3600.
