@@ -253,8 +253,15 @@ class geo_index(dict):
             # read the file as a collection of points
             temp_GI=geo_index().from_file(filename)
             xy_bin=temp_GI.bins_as_array()
-            for attr in temp_GI.attrs.keys():
-                self.attrs[attr]=temp_GI.attrs[attr]
+            # loop over a minimal set of attributes:
+            for attr in ['delta','SRS_proj4','dir_root']:
+                if attr in temp_GI.attrs:
+                    self.attrs[attr]=temp_GI.attrs[attr]
+            self.attrs['file_%d' % number] = filename_out
+            self.attrs['type_%d' % number] = file_type
+            if dir_root is not None:
+                self.attrs['dir_root']=dir_root
+            self.attrs['n_files']=1
             self.from_xy(xy_bin, filename=filename_out, file_type=file_type, number=number, fake_offset_val=-1)
         if file_type in ['indexed_h5']:
             h5f=h5py.File(filename,'r')
