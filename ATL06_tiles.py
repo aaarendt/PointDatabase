@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Mon Apr 29 09:40:02 2019
@@ -149,7 +150,7 @@ def reconstruct_tracks(D, x0=None, y0=None, W=None):
         D0.append(this_D)   
     return D0
 
-def make_queue(queue_file, hemisphere=-1):
+def make_queue(tile_root, GI_file, queue_file, cycle=1, hemisphere=-1, tile_spacing=1.e5):
 
     """
     make a queue of commands to generate the tiles for ATL06
@@ -182,14 +183,13 @@ def make_queue(queue_file, hemisphere=-1):
     y0=y0.ravel()[maski]
     xyTile=set([xy0 for xy0 in zip(x0, y0)])
     dilate_bins(xyTile, tile_spacing)
-    #EDIT BELOW TO SET THE EXECUTABLE LOCATION
-    with open(queue_file,'w') as qf:
-        for cycle in ['01','02','03']:
-            for xy in xyTile:
-                qf.write('python3 /home/ben/git_repos/PointDatabase/ATL06_tiles.py %d %d %d %s\n'% (xy[0], xy[1], hemisphere, cycle))
-  
 
-def index_tiles(tile_dir_root, hemisphere):
+    this_python_file=os.path.abspath(sys.argv[0])
+    with open(queue_file,'w') as qf:
+        for xy in xyTile:
+            qf.write(f"python3 {this_python_file} {tile_root} -G {GI_file} -H {hemisphere} --xy {xy[0]} {xy[1]} -c {cycle}" + "\n")
+  
+def index_tiles(tile_dir_root, cycle, hemisphere):
      """
      Generate a geo_index for the tile files
      
@@ -201,12 +201,12 @@ def index_tiles(tile_dir_root, hemisphere):
          SRS_proj4='+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'
      else:
          SRS_proj4='+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs '
-
-     files=glob(tile_dir_root+'/E*.h5')
+     cycle_root=tile_dir_root+('/cycle_%02d' % cycle)
+     files=glob(cycle_root+'/E*.h5')
      print("found files:")
      print(files)
-     iList = index_list_for_files(files, "indexed_h5", [1.e4, 1.e4], SRS_proj4, dir_root=tile_dir_root)
-     geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir_root).to_file(tile_dir_root+'/GeoIndex.h5')
+     iList = index_list_for_files(files, "indexed_h5", [1.e4, 1.e4], SRS_proj4, dir_root=cycle_root)
+     geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir_root).to_file(cycle_root+'/GeoIndex.h5')
 
 def index_cycle_indices(tile_dir_root, hemisphere):
 
@@ -232,34 +232,54 @@ def index_cycle_indices(tile_dir_root, hemisphere):
 
     
 def main():
+    import argparse
+    parser=argparse.ArgumentParser('Save ATL06 data into large but manageable blocks')
+    parser.add_argument('tile_root', type=str, help='root directory for tiles.')
+    parser.add_argument('-H', '--Hemisphere', type=int, default=-1, help='Hemisphere.  +1 for arctic, -1 for Antarctic')
+    parser.add_argument('--xy', type=float, nargs=2, help='bin center location, m: x,y')
+    parser.add_argument('-c','--cycle', type=int, default=None, help='Cycle number')
+    parser.add_argument('-W','--W_bin', type=float, default=1.e4, help='Bin spacing, m')
+    parser.add_argument('-T', '--Tile_spacing', type=float, default=1.e5, help='Spacing for output tiles, m')
+    parser.add_argument('--index_of_tiles', action='store_true',\
+                        help='make an index of the tiles in a cycle.  Requires tile_root, --cycle')
+    parser.add_argument('--index_of_cycles', action='store_true',\
+                        help='index the indices for the cycle tiles.  Run this after --index_of_tiles, requires tile root')
+    parser.add_argument('-q', '--queue_file', default=None, help='make a queue of commands to make tiles in a cycle.  Requires tile_root, --cycle, --xy, --ATL06_geoindex')
+    parser.add_argument('-G','--Geoindex', type=str, help='ATL06 geoindex location.')
+    args=parser.parse_args()
+
     #make_queue('/home/ben/temp/GL_tile_queue.txt', hemisphere=1)
     #index_tiles('/Volumes/ice2/ben/scf/GL_06/tiles/001/', 1)
-    if len(sys.argv)==3:
-        #for dirname in glob(sys.argv[1]+'/cycle*'):
-        #    index_tiles(dirname, sys.argv[2])
-        index_cycle_indices(sys.argv[1], sys.argv[2])
+    if args.index_of_cycles:
+        index_cycle_indices(args.tile_root, args.Hemisphere)
         sys.exit(0)
-    xy=(np.int(sys.argv[1]), np.int(sys.argv[2]))
-    hemisphere=np.int(sys.argv[3])
-    cycle=sys.argv[4]
+    if args.index_of_tiles:
+        index_tiles(args.tile_root, args.Hemisphere)
+        sys.exit(0)
+        
+    try:
+        GI_file=args.Geoindex % args.cycle
+    except TypeError:
+        GI_file=args.Geoindex
+        
+    if args.queue_file is not None:
+        #make_queue(tile_root, GI_file, queue_file, hemisphere=-1, tile_spacing=1.e5
+        make_queue(args.tile_root, GI_file, args.queue_file, hemisphere=args.Hemisphere, cycle=args.cycle, tile_spacing=args.Tile_spacing)
+        sys.exit(0)
+        
     pad=0
-    bin_W=1.e4
-    tile_spacing=1.e5
-    
     blockmedian_scale=None
     #Skip seg_diff_Scale (August 27: changed from 5 to None)
     seg_diff_scale=None
-    out_dir='/Volumes/insar10/ben/temp/cycle_%s' % cycle
+    out_dir=args.tile_root+('/cycle_%s' % args.cycle)
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
         
-    if hemisphere==1:
+    if args.Hemisphere==1:
         SRS_proj4='+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'
-        GI_file='/Volumes/ice2/ben/scf/GL_06/001/cycle_%s/index/GeoIndex.h5' % cycle
     else:
         SRS_proj4='+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'
         #mask_G=mapData().from_geotif('/Volumes/insar5/gmap/OIB_data/AA/masks/MOA_2009_grounded.tif')
-        GI_file='/Volumes/ice2/ben/scf/AA_06/001/cycle_%s/index/GeoIndex.h5' % cycle
     field_dict={None:['delta_time','h_li','h_li_sigma','latitude','longitude','atl06_quality_summary','segment_id','sigma_geo_h'], 
             'fit_statistics':['dh_fit_dx'],
             'ground_track':['x_atc', 'sigma_geo_xt','sigma_geo_at'],
@@ -267,9 +287,11 @@ def main():
             'orbit_info':['rgt','cycle_number'],
             'derived':['valid','matlab_time', 'n_pixels','LR','BP','spot','rss_along_track_dh']}
     
-    arg_dict={'SRS_proj4':SRS_proj4,'tile_spacing':tile_spacing, 'pad':pad, 'bin_W':bin_W, 'GI_file':GI_file,'out_dir':out_dir,'field_dict':field_dict,'cycle':cycle}
+    arg_dict={'SRS_proj4':SRS_proj4,'tile_spacing':args.Tile_spacing, 'pad':pad, \
+              'bin_W':args.W_bin, 'GI_file':GI_file,'out_dir':out_dir, \
+              'field_dict':field_dict,'cycle':args.cycle}
     arg_dict.update({'seg_diff_scale':seg_diff_scale, 'blockmedian_scale':blockmedian_scale})
-    arg_dict.update({'xy0':xy})
+    arg_dict.update({'xy0':args.xy})
     make_tile(arg_dict)
 
 if __name__=='__main__':
