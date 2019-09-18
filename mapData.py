@@ -247,8 +247,8 @@ class mapData(object):
             good_x = np.flatnonzero((x >= np.min(self.x)) & (x <= np.max(self.x)))
             good_y = np.flatnonzero((y >= np.min(self.y)) & (y <= np.max(self.y)))
             if (len(good_y)>0) and (len(good_x)>0):
-                good_x = slice(good_x[0], good_x[-1])
-                good_y = slice(good_y[0], good_y[-1])
+                good_x = slice(good_x[0], good_x[-1]+1)
+                good_y = slice(good_y[0], good_y[-1]+1)
 
                 result[good_y, good_x] = self.interpolator(y[good_y], x[good_x])
                 if self.nan_interpolator is not None:
