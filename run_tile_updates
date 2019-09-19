@@ -20,7 +20,7 @@ done
 # index the cycles
 ATL06_tiles.py $tile_dir --index_of_cycles
 
-ATL06_tiles --test_plot -G 
+ATL06_tiles --test_plot -G $tile_dir/GeoIndex.h5
 
 
 
