@@ -222,7 +222,7 @@ def index_cycle_indices(tile_dir_root, hemisphere):
         xy=temp.bins_as_array()
         index_list.append(geo_index(delta=[1.e4, 1.e4]).from_xy(xy, filename=sub_index_file, file_type='h5_geoindex', fake_offset_val=-1))
         temp=None
-    geo_index(delta=[1.e4, 1.e4], SRS_proj4=SRS_proj4).from_list(index_list).to_file(tile_dir_root+'/GeoIndex_v2.h5')
+    geo_index(delta=[1.e4, 1.e4], SRS_proj4=SRS_proj4).from_list(index_list).to_file(tile_dir_root+'/GeoIndex.h5')
      
     
     #iList=index_list_for_files(files, "h5_geoindex", [1.e4, 1.e4], SRS_proj4)#, dir_root=tile_dir_root)
@@ -230,7 +230,20 @@ def index_cycle_indices(tile_dir_root, hemisphere):
     #    index.change_root(tile_dir_root)
     #geo_index(SRS_proj4=SRS_proj4, delta=[1.e4, 1.e4]).from_list(iList, dir_root=tile_dir_root).to_file(tile_dir_root+'/GeoIndex.h5')
 
+
+def test_plot(gi_file):
+    import matplotlib.pyplot as plt
+    index=geo_index().from_file(gi_file)
+    dx,dy=np.meshgrid(np.array([-1, 0, 1])*1.e4, np.array([-1, 0, 1])*1.e4)
+    XX=index.bins_as_array()
     
+    D_list=index.query_xy((np.array(XX[0][0])+dx, np.array(XX[1][0])+dy) , fields=['x','y'])
+    plt.figure(); 
+    for D in D_list:
+        plt.plot(D.x, D.y,'.')
+    plt.show()
+
+
 def main():
     import argparse
     parser=argparse.ArgumentParser('Save ATL06 data into large but manageable blocks')
@@ -246,7 +259,12 @@ def main():
                         help='index the indices for the cycle tiles.  Run this after --index_of_tiles, requires tile root')
     parser.add_argument('-q', '--queue_file', default=None, help='make a queue of commands to make tiles in a cycle.  Requires tile_root, --cycle, --xy, --ATL06_geoindex')
     parser.add_argument('-G','--Geoindex', type=str, help='ATL06 geoindex location.')
+    parser.add_argument('--test_plot', action='store_true', help="make a test plot.  Need to secify a geoindex file (-G)")
     args=parser.parse_args()
+
+    if args.test_plot:
+        test_plot(args.Geoindex)
+        sys.exit(0)
 
     #make_queue('/home/ben/temp/GL_tile_queue.txt', hemisphere=1)
     #index_tiles('/Volumes/ice2/ben/scf/GL_06/tiles/001/', 1)
@@ -254,7 +272,7 @@ def main():
         index_cycle_indices(args.tile_root, args.Hemisphere)
         sys.exit(0)
     if args.index_of_tiles:
-        index_tiles(args.tile_root, args.Hemisphere)
+        index_tiles(args.tile_root, args.cycle, args.Hemisphere)
         sys.exit(0)
         
     try:
@@ -271,7 +289,7 @@ def main():
     blockmedian_scale=None
     #Skip seg_diff_Scale (August 27: changed from 5 to None)
     seg_diff_scale=None
-    out_dir=args.tile_root+('/cycle_%s' % args.cycle)
+    out_dir=args.tile_root+('/cycle_%02d' % args.cycle)
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
         
