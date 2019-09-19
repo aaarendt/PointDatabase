@@ -290,6 +290,8 @@ class geo_index(dict):
                 xy[0]=np.array(xy[0])
                 xy[1]=np.array(xy[1])
             self.from_xy(xy, filename=filename_out, file_type=file_type, number=number, first_last=first_last, fake_offset_val=fake_offset)
+            if dir_root is not None:
+                self.attrs['dir_root']=dir_root
             h5f.close()
         if file_type in ['indexed_h5_from_matlab']:
             h5f=h5py.File(filename,'r')
