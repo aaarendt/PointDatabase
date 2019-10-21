@@ -28,7 +28,4 @@ setup(name='pointdb',
     url='https://github.com/SmithB/PointDatabase',
     packages=find_packages(),
     long_description=long_description,
-    #install_requires=['gdal','numpy','scipy','matplotlib'],
-    #Note: this will write to /usr/local/bin
-    #scripts=['himatpy/modscag_download.py', 'himatpy/LIS/LISpreprocess.py']
 )
